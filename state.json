@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T22:39:08.891980+00:00",
-    "next_run_at": "2026-02-13T22:40:08.891988+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T22:39:08.885874+00:00",
+    "last_run_at": "2026-02-13T22:49:30.240437+00:00",
+    "next_run_at": "2026-02-13T22:50:30.240444+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T22:49:30.239759+00:00",
     "last_error": null,
-    "attempts": 58,
-    "last_attempt_at": "2026-02-13T22:39:08.892020+00:00",
-    "run_id": "f90558d6"
+    "attempts": 60,
+    "last_attempt_at": "2026-02-13T22:49:30.240452+00:00",
+    "run_id": "00e246f6"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
@@ -68,13 +68,13 @@
   "health_check_url": {
     "task_id": "health_check_url",
     "status": "success",
-    "last_run_at": "2026-02-13T22:39:09.039104+00:00",
-    "next_run_at": "2026-02-13T22:44:09.039111+00:00",
-    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.15s)",
+    "last_run_at": "2026-02-13T22:49:30.307587+00:00",
+    "next_run_at": "2026-02-13T22:54:30.307601+00:00",
+    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.07s)",
     "last_error": null,
-    "attempts": 24,
-    "last_attempt_at": "2026-02-13T22:39:09.039120+00:00",
-    "run_id": "f90558d6"
+    "attempts": 25,
+    "last_attempt_at": "2026-02-13T22:49:30.307613+00:00",
+    "run_id": "00e246f6"
   },
   "github_trending_watch": {
     "task_id": "github_trending_watch",
@@ -112,12 +112,12 @@
   "article_generate": {
     "task_id": "article_generate",
     "status": "success",
-    "last_run_at": "2026-02-13T22:39:13.739236+00:00",
-    "next_run_at": "2026-02-13T22:40:13.739245+00:00",
-    "last_result_summary": "\u2705 Article Generation Results\n\u2022 \u2705 Successful: 2\n\u2022 \u274c Failed: 0\n\u2022 \u2298 Skipped: 0\n\u2022 \u23f1\ufe0f Time: 4.8s\n\u2022 \ud83e\udd16 Provider: groq\n\n\u2705 Generated 2 article(s):\n  \u2022 \u4eba\u5de5\u667a\u80fd\uff1a\u6311\u6218\u548c\u673a\u9047 (45 words)\n  \u2022 \u4e91\u8ba1\u7b97\u6982\u89c8 (54 words)\n",
+    "last_run_at": "2026-02-13T22:49:35.107113+00:00",
+    "next_run_at": "2026-02-13T22:50:35.107122+00:00",
+    "last_result_summary": "\u2705 Article Generation Results\n\u2022 \u2705 Successful: 2\n\u2022 \u274c Failed: 0\n\u2022 \u2298 Skipped: 0\n\u2022 \u23f1\ufe0f Time: 4.9s\n\u2022 \ud83e\udd16 Provider: groq\n\n\u2705 Generated 2 article(s):\n  \u2022 \u4eba\u5de5\u667a\u80fd\uff1a\u667a\u80fd\u8ba1\u7b97\u673a\u7684\u672a\u6765 (55 words)\n  \u2022 \u4e91\u8ba1\u7b97\uff08Cloud Computing\uff09\u7b80\u4ecb (53 words)\n",
     "last_error": null,
-    "attempts": 12,
-    "last_attempt_at": "2026-02-13T22:39:13.739256+00:00",
-    "run_id": "f90558d6"
+    "attempts": 13,
+    "last_attempt_at": "2026-02-13T22:49:35.107134+00:00",
+    "run_id": "00e246f6"
   }
 }
