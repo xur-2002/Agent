@@ -1,230 +1,246 @@
-"""Main agent orchestration module with concurrency and scheduling."""
+"""Enhanced main agent orchestration with state management, retry logic, and rich Feishu cards."""
 
 import sys
 import os
 import logging
+import uuid
+import subprocess
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
-from agent.models import Task, TaskResult
+from agent.config import Config
+from agent.models import Task, TaskState, TaskResult
 from agent.storage import get_storage
-from agent.task_runner import run_task
+from agent.task_runner import run_task_with_retry, run_heartbeat
 from agent.scheduler import should_run, compute_next_run
-from agent.feishu import send_card, send_alert, send_text
+from agent.feishu import send_rich_card, send_alert_card
 from agent.utils import now_utc, now_iso, truncate_str
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 
 def main() -> int:
-    """Main agent orchestration logic.
+    """Main agent orchestration with state management and retries.
     
     Returns:
-        0 on success, 1 on any task failure or delivery failure.
+        0 on success, 1 on any task failure.
     """
-    logger.info("=" * 60)
-    logger.info("Agent run started")
+    logger.info("=" * 70)
+    logger.info("AGENT RUN STARTED")
+    logger.info("=" * 70)
     
+    # Validate configuration
+    try:
+        Config.validate()
+    except ValueError as e:
+        logger.error(f"Configuration error: {e}")
+        return 1
+    
+    run_id = str(uuid.uuid4())[:8]
     run_start = now_utc()
     all_success = True
-    executed_tasks: List[Dict[str, Any]] = []
-    failed_tasks: List[Dict[str, Any]] = []
+    attempted_tasks = []
+    executed_tasks = []
+    failed_tasks = []
+    error_msg = None
     
     try:
-        # Load tasks
-        logger.info("Loading tasks from storage...")
+        # Load task configuration and state
+        logger.info("Loading task configuration and state...")
         storage = get_storage()
         tasks = storage.load_tasks()
-        logger.info(f"Loaded {len(tasks)} tasks")
+        task_state = storage.load_state()
         
-        # Filter eligible tasks
-        eligible_tasks = [t for t in tasks if t.enabled and should_run(t)]
+        logger.info(f"Loaded {len(tasks)} task configurations")
+        logger.info(f"Loaded state for {len(task_state)} previous task runs")
+        
+        # Always include heartbeat task
+        heartbeat_task = Task(
+            id="heartbeat",
+            title="Heartbeat",
+            enabled=True,
+            frequency="every_minute"
+        )
+        
+        # Filter eligible tasks (including heartbeat)
+        eligible_tasks = []
+        
+        # Add heartbeat
+        eligible_tasks.append(heartbeat_task)
+        
+        # Add other tasks that are due
+        for task in tasks:
+            if should_run(task, task_state.get(task.id)):
+                eligible_tasks.append(task)
+        
         logger.info(f"Found {len(eligible_tasks)} eligible tasks to run")
         
-        if not eligible_tasks:
-            logger.info("No tasks to run")
-            return 0
+        if len(eligible_tasks) == 1:  # Only heartbeat
+            logger.info("No user tasks due, running heartbeat only")
         
-        # Execute tasks concurrently
-        max_workers = min(4, len(eligible_tasks))
-        logger.info(f"Starting concurrent execution with {max_workers} worker(s)")
+        # Execute tasks concurrently  
+        max_workers = min(Config.MAX_CONCURRENCY, len(eligible_tasks))
+        logger.info(f"Concurrent execution: {max_workers}worker(s), max_concurrency={Config.MAX_CONCURRENCY}")
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Start all tasks
             future_to_task = {
-                executor.submit(run_task, task): task 
+                executor.submit(
+                    run_task_with_retry,
+                    task,
+                    Config.RETRY_COUNT,
+                    Config.get_retry_backoff_list()
+                ): task
                 for task in eligible_tasks
             }
             
-            # Collect results as they complete
             for future in as_completed(future_to_task):
                 task = future_to_task[future]
                 task_id = task.id
+                attempted_tasks.append(task_id)
                 
                 try:
-                    result = future.result()
+                    result: TaskResult = future.result()
                     
-                    # Update task
-                    task.status = result.status
-                    task.last_run_at = now_iso()
-                    task.next_run_at = compute_next_run(task, now_utc()).isoformat()
-                    task.last_result_summary = truncate_str(result.summary, 400)
+                    # Update state  
+                    state = task_state.get(task_id) or TaskState(task_id=task_id)
+                    state.status = result.status
+                    state.last_run_at = now_iso()
+                    state.next_run_at = compute_next_run(task, now_utc()).isoformat()
+                    state.last_result_summary = truncate_str(result.summary, 500)
+                    state.last_error = truncate_str(result.error or "", 500) if result.error else None
+                    state.attempts = state.attempts + 1
+                    state.last_attempt_at = now_iso()
+                    state.run_id = run_id
                     
-                    if result.error:
-                        task.last_error = truncate_str(result.error, 400)
+                    task_state[task_id] = state
+                    
+                    # Record result
+                    if result.status == "success":
+                        executed_tasks.append({
+                            "id": task_id,
+                            "title": task.title,
+                            "summary": result.summary,
+                            "duration": result.duration_sec,
+                            "metrics": result.metrics
+                        })
+                        logger.info(f"✓ [{task_id}] SUCCESS ({result.duration_sec:.2f}s)")
+                    else:
                         all_success = False
                         failed_tasks.append({
                             "id": task_id,
                             "title": task.title,
-                            "summary": task.last_result_summary,
-                            "error": task.last_error,
+                            "summary": result.summary,
+                            "error": result.error,
                             "duration": result.duration_sec
                         })
-                        
-                        logger.error(f"[{task_id}] ✗ FAILED: {task.last_error}")
-                        
-                        # Send immediate alert
-                        try:
-                            send_alert(task_id, task.title, task.last_error)
-                        except Exception as alert_exc:
-                            logger.warning(f"[{task_id}] Failed to send alert: {alert_exc}")
-                    else:
-                        executed_tasks.append({
-                            "id": task_id,
-                            "title": task.title,
-                            "summary": task.last_result_summary,
-                            "duration": result.duration_sec,
-                            "metrics": result.metrics
-                        })
-                        
-                        logger.info(f"[{task_id}] ✓ OK: {task.last_result_summary}")
+                        logger.error(f"✗ [{task_id}] FAILED: {result.error}")
                 
                 except Exception as e:
                     all_success = False
-                    error_msg = str(e)
-                    logger.error(f"[{task_id}] Task crashed: {error_msg}")
+                    error_str = str(e)
+                    logger.error(f"✗ [{task_id}] CRASHED: {error_str}")
                     
-                    task.status = "failed"
-                    task.last_run_at = now_iso()
-                    task.last_error = truncate_str(error_msg, 400)
+                    state = task_state.get(task_id) or TaskState(task_id=task_id)
+                    state.status = "failed"
+                    state.last_run_at = now_iso()
+                    state.last_error = truncate_str(error_str, 500)
+                    task_state[task_id] = state
                     
                     failed_tasks.append({
                         "id": task_id,
                         "title": task.title,
-                        "error": task.last_error
+                        "error": error_str
                     })
-                    
-                    try:
-                        send_alert(task_id, task.title, error_msg)
-                    except Exception as alert_exc:
-                        logger.warning(f"[{task_id}] Failed to send alert: {alert_exc}")
         
-        # Save updated tasks
-        logger.info("Saving tasks to storage...")
-        storage.save_tasks(tasks)
-        logger.info(f"Saved {len(tasks)} tasks")
+        # Save state
+        logger.info("Saving task state...")
+        if not Config.DRY_RUN:
+            storage.save_state(task_state)
+        else:
+            logger.info("[DRY RUN] Skipped state save")
         
         # Send consolidated Feishu card
         run_duration = (now_utc() - run_start).total_seconds()
-        
-        try:
-            send_consolidated_card(
-                executed_tasks,
-                failed_tasks,
-                run_duration,
-                all_success
-            )
-        except Exception as card_exc:
-            logger.error(f"Failed to send Feishu card: {card_exc}")
-            all_success = False
-        
-        logger.info("=" * 60)
         logger.info(f"Agent run completed in {run_duration:.2f}s")
         
-        if all_success and not failed_tasks:
-            logger.info("✓ All systems operational")
-            return 0
-        else:
-            logger.error(f"✗ Run had failures: {len(failed_tasks)} task(s) failed")
-            return 1
+        try:
+            logger.info("Sending Feishu card...")
+            if not Config.DRY_RUN:
+                send_rich_card(
+                    executed_tasks,
+                    failed_tasks,
+                    run_duration,
+                    all_success,
+                    run_id
+                )
+                if failed_tasks:
+                    send_alert_card(failed_tasks, run_id)
+            else:
+                logger.info("[DRY RUN] Skipped Feishu notification")
+        except Exception as e:
+            logger.error(f"Failed to send Feishu card: {e}")
+            error_msg = str(e)
+            all_success = False
+        
+        # Try to persist state to repo if requested
+        if Config.PERSIST_STATE == "repo":
+            try:
+                logger.info("Persisting state to repository...")
+                subprocess.run([
+                    "git",
+                    "config",
+                    "--local",
+                    "user.email",
+                    "agent@github.com"
+                ], check=True)
+                subprocess.run([
+                    "git",
+                    "config",
+                    "--local",
+                    "user.name",
+                    "Agent Workflow"
+                ], check=True)
+                subprocess.run(["git", "add", Config.STATE_FILE], check=True)
+                subprocess.run([
+                    "git",
+                    "commit",
+                    "-m",
+                    f"chore: update agent state (run_id={run_id})"
+                ], check=False)  # Don't fail if nothing to commit
+                subprocess.run(["git", "push"], check=True)
+                logger.info("State persisted to repository")
+            except Exception as e:
+                logger.warning(f"Failed to persist state to repo: {e}")
+        
+        logger.info("=" * 70)
+        logger.info(f"RESULTS: {len(executed_tasks)} succeeded, {len(failed_tasks)} failed")
+        logger.info("=" * 70)
+        
+        return 0 if all_success else 1
     
     except Exception as e:
-        logger.error(f"Fatal error: {e}")
-        all_success = False
+        logger.error(f"Fatal error: {e}", exc_info=True)
+        error_msg = str(e)
         
-        # Try to send alert
         try:
-            send_alert("agent", "Agent Fatal Error", str(e))
-        except Exception as alert_exc:
-            logger.warning(f"Failed to send fatal error alert: {alert_exc}")
+            if not Config.DRY_RUN:
+                send_alert_card([{
+                    "id": "agent",
+                    "title": "Agent Error",
+                    "error": error_msg
+                }], "fatal")
+        except Exception as alert_e:
+            logger.warning(f"Couldnot send alert: {alert_e}")
         
         return 1
 
 
-def send_consolidated_card(
-    executed_tasks: List[Dict[str, Any]],
-    failed_tasks: List[Dict[str, Any]],
-    duration_sec: float,
-    all_success: bool
-) -> None:
-    """Send a consolidated Feishu card with all task results.
-    
-    Args:
-        executed_tasks: List of successful task results.
-        failed_tasks: List of failed task results.
-        duration_sec: Total run duration.
-        all_success: Whether all tasks succeeded.
-    """
-    status_icon = "✅" if all_success else "⚠️"
-    title = f"Agent Run {status_icon} {now_utc().strftime('%Y-%m-%d %H:%M UTC')}"
-    
-    sections = []
-    
-    # Summary section
-    sections.append({
-        "title": "Summary",
-        "content": (
-            f"• Successful: {len(executed_tasks)}\n"
-            f"• Failed: {len(failed_tasks)}\n"
-            f"• Duration: {duration_sec:.2f}s"
-        )
-    })
-    
-    # Successful tasks
-    if executed_tasks:
-        success_lines = []
-        for task in executed_tasks:
-            success_lines.append(
-                f"✓ **{task['title']}** ({task.get('duration', 0):.2f}s)\n"
-                f"  {task['summary'][:100]}"
-            )
-        sections.append({
-            "title": "Successful Tasks",
-            "content": "\n".join(success_lines)
-        })
-    
-    # Failed tasks
-    if failed_tasks:
-        failed_lines = []
-        for task in failed_tasks:
-            error_preview = task.get('error', 'Unknown error')[:100]
-            failed_lines.append(
-                f"✗ **{task['title']}**\n"
-                f"  {error_preview}"
-            )
-        sections.append({
-            "title": "Failed Tasks",
-            "content": "\n".join(failed_lines)
-        })
-    
-    send_card(title, sections)
-
-
 if __name__ == "__main__":
     sys.exit(main())
+

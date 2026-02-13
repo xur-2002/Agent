@@ -1,4 +1,4 @@
-"""Storage backends for tasks."""
+"""Storage backends for tasks and state (refactored with separation)."""
 
 import json
 import tempfile
@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from agent.models import Task
+from agent.models import Task, TaskState
 from agent.utils import safe_json_dump
 
 logger = logging.getLogger(__name__)
@@ -19,33 +19,45 @@ class StorageBackend(ABC):
     
     @abstractmethod
     def load_tasks(self) -> List[Task]:
-        """Load tasks from storage."""
+        """Load task configurations from storage."""
         pass
     
     @abstractmethod
-    def save_tasks(self, tasks: List[Task]) -> None:
-        """Save tasks to storage."""
+    def load_state(self) -> Dict[str, TaskState]:
+        """Load task state from storage. Returns dict of {task_id: TaskState}."""
+        pass
+    
+    @abstractmethod
+    def save_state(self, state: Dict[str, TaskState]) -> None:
+        """Save task state to storage."""
         pass
 
 
 class JsonFileStorage(StorageBackend):
-    """Store tasks in local tasks.json file."""
+    """Store tasks in local tasks.json and state in state.json."""
     
-    def __init__(self, file_path: Optional[Path] = None):
+    def __init__(self, state_file: Optional[str] = None):
         """Initialize JsonFileStorage.
         
         Args:
-            file_path: Path to tasks.json. If None, uses repo root/tasks.json.
+            state_file: Path to state.json. If None, uses repo root/state.json.
         """
-        if file_path is None:
-            # Navigate from agent/storage.py to root/tasks.json
-            root = Path(__file__).parent.parent
-            file_path = root / "tasks.json"
+        root = Path(__file__).parent.parent
+        self.tasks_file = root / "tasks.json"
         
-        self.file_path = file_path
+        # State file: use STATE_FILE env var or parameter or default to state.json
+        if state_file:
+            state_file_path = Path(state_file)
+        else:
+            state_file_path = Path(os.getenv("STATE_FILE", "state.json"))
+        
+        if not state_file_path.is_absolute():
+            self.state_file = root / state_file_path
+        else:
+            self.state_file = state_file_path
     
     def load_tasks(self) -> List[Task]:
-        """Load tasks from tasks.json.
+        """Load tasks from tasks.json (read-only config).
         
         Returns:
             List of Task objects.
@@ -54,46 +66,76 @@ class JsonFileStorage(StorageBackend):
             FileNotFoundError: If tasks.json does not exist.
             json.JSONDecodeError: If tasks.json is invalid JSON.
         """
-        if not self.file_path.exists():
-            raise FileNotFoundError(f"tasks.json not found at {self.file_path}")
+        if not self.tasks_file.exists():
+            raise FileNotFoundError(f"tasks.json not found at {self.tasks_file}")
         
-        with open(self.file_path, "r") as f:
+        with open(self.tasks_file, "r", encoding="utf-8") as f:
             data = json.load(f)
         
-        return [Task.from_dict(item) for item in data]
+        tasks = [Task.from_dict(item) for item in data]
+        logger.debug(f"Loaded {len(tasks)} task configurations from {self.tasks_file}")
+        return tasks
     
-    def save_tasks(self, tasks: List[Task]) -> None:
-        """Save tasks to tasks.json using atomic write.
+    def load_state(self) -> Dict[str, TaskState]:
+        """Load task state from state.json.
+        
+        Returns:
+            Dict of {task_id: TaskState}. Empty dict if file doesn't exist.
+        """
+        if not self.state_file.exists():
+            logger.debug(f"State file not found at {self.state_file}, starting fresh")
+            return {}
+        
+        try:
+            with open(self.state_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            state_dict = {}
+            for task_id, state_data in data.items():
+                state_dict[task_id] = TaskState.from_dict(state_data)
+            
+            logger.debug(f"Loaded state for {len(state_dict)} tasks from {self.state_file}")
+            return state_dict
+        except Exception as e:
+            logger.warning(f"Failed to load state file: {e}, starting fresh")
+            return {}
+    
+    def save_state(self, state: Dict[str, TaskState]) -> None:
+        """Save task state to state.json using atomic write.
         
         Writes to a temporary file first, then replaces the original
         to avoid corruption on interruption.
         
         Args:
-            tasks: List of Task objects.
+            state: Dict of {task_id: TaskState}.
         """
-        # Convert tasks to serializable dicts
-        data = [task.to_dict() for task in tasks]
-        json_str = safe_json_dump(data)
+        # Convert state to serializable dicts
+        state_data = {task_id: ts.to_dict() for task_id, ts in state.items()}
+        json_str = safe_json_dump(state_data)
         
-        # Write to temporary file first
+        # Ensure directory exists
+        self.state_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write to temporary file first (atomic write)
         with tempfile.NamedTemporaryFile(
             mode="w",
-            dir=self.file_path.parent,
+            dir=self.state_file.parent,
             suffix=".tmp",
-            delete=False
+            delete=False,
+            encoding="utf-8"
         ) as tmp:
             tmp.write(json_str)
             tmp_path = tmp.name
         
-        # Replace original with temp file
+        # Replace original with temp file (atomic on POSIX systems)
         tmp_path_obj = Path(tmp_path)
-        tmp_path_obj.replace(self.file_path)
+        tmp_path_obj.replace(self.state_file)
         
-        logger.debug(f"Saved {len(tasks)} tasks to {self.file_path}")
+        logger.debug(f"Saved state for {len(state)} tasks to {self.state_file}")
 
 
 class BitableStorage(StorageBackend):
-    """Store tasks in Feishu Bitable (multi-dimensional table).
+    """Store tasks and state in Feishu Bitable (multi-dimensional table).
     
     Requires environment variables:
     - FEISHU_APP_ID
@@ -118,108 +160,53 @@ class BitableStorage(StorageBackend):
         self.access_token = None
         self.token_expires_at = 0
     
-    def _get_access_token(self) -> str:
-        """Get valid Feishu access token, refreshing if needed."""
-        import time
-        import requests
-        
-        now = time.time()
-        if self.access_token and now < self.token_expires_at:
-            return self.access_token
-        
-        # Refresh token
-        url = "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal"
-        payload = {
-            "app_id": self.app_id,
-            "app_secret": self.app_secret
-        }
-        
-        response = requests.post(url, json=payload, timeout=10)
-        response.raise_for_status()
-        
-        data = response.json()
-        self.access_token = data["app_access_token"]
-        self.token_expires_at = now + data.get("expire", 7200) - 300  # Refresh 5min before expiry
-        
-        return self.access_token
-    
     def load_tasks(self) -> List[Task]:
-        """Load tasks from Bitable.
+        """Load task configurations from Bitable.
         
         Returns:
             List of Task objects from bitable.
         """
-        import requests
-        
-        token = self._get_access_token()
-        
-        # Get records from table
-        url = (
-            f"https://open.feishu.cn/open-apis/bitable/v1/apps/{self.bitable_token}"
-            f"/tables/{self.table_id}/records"
-        )
-        headers = {"Authorization": f"Bearer {token}"}
-        
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        data = response.json()
-        records = data.get("data", {}).get("items", [])
-        
-        tasks = []
-        for record in records:
-            fields = record.get("fields", {})
-            # Map bitable fields to Task fields
-            task_dict = {
-                "id": fields.get("id", ""),
-                "title": fields.get("title", ""),
-                "enabled": fields.get("enabled", True),
-                "frequency": fields.get("frequency", "daily"),
-                "timezone": fields.get("timezone", "UTC"),
-                "params": fields.get("params", {}),
-                "status": fields.get("status", "scheduled"),
-                "last_run_at": fields.get("last_run_at"),
-                "next_run_at": fields.get("next_run_at"),
-                "last_result_summary": fields.get("last_result_summary"),
-                "last_error": fields.get("last_error"),
-            }
-            tasks.append(Task.from_dict(task_dict))
-        
-        logger.debug(f"Loaded {len(tasks)} tasks from Bitable")
-        return tasks
+        # TODO: Implement fetching from Bitable
+        # For now, fallback to JSON file
+        fallback = JsonFileStorage()
+        return fallback.load_tasks()
     
-    def save_tasks(self, tasks: List[Task]) -> None:
-        """Save tasks to Bitable.
+    def load_state(self) -> Dict[str, TaskState]:
+        """Load task state from Bitable.
+        
+        Returns:
+            Dict of {task_id: TaskState}.
+        """
+        # TODO: Implement fetching state from Bitable
+        # For now, fallback to local
+        fallback = JsonFileStorage()
+        return fallback.load_state()
+    
+    def save_state(self, state: Dict[str, TaskState]) -> None:
+        """Save task state to Bitable.
         
         Args:
-            tasks: List of Task objects.
+            state: Dict of {task_id: TaskState}.
         """
-        import requests
-        
-        token = self._get_access_token()
-        
-        url = (
-            f"https://open.feishu.cn/open-apis/bitable/v1/apps/{self.bitable_token}"
-            f"/tables/{self.table_id}/records/batch_update"
-        )
-        headers = {"Authorization": f"Bearer {token}"}
-        
-        # For now, log a note that full sync is complex
-        logger.debug(f"Bitable save: would update {len(tasks)} tasks (full sync not implemented)")
+        # TODO: Implement saving state to Bitable
+        # For now, fallback to local
+        fallback = JsonFileStorage()
+        fallback.save_state(state)
 
 
-def get_storage() -> StorageBackend:
-    """Get appropriate storage backend based on environment.
+def get_storage(state_file: Optional[str] = None) -> StorageBackend:
+    """Factory function to get appropriate storage backend based on config.
+    
+    Args:
+        state_file: Optional path to state file.
     
     Returns:
-        BitableStorage if env vars present, otherwise JsonFileStorage.
+        StorageBackend instance.
     """
-    if all(os.getenv(var) for var in [
-        "FEISHU_APP_ID", "FEISHU_APP_SECRET",
-        "FEISHU_BITABLE_APP_TOKEN", "FEISHU_BITABLE_TABLE_ID"
-    ]):
-        logger.info("Using Bitable storage backend")
-        return BitableStorage()
+    persist_mode = os.getenv("PERSIST_STATE", "local").lower()
     
-    logger.debug("Using JSON file storage backend")
-    return JsonFileStorage()
+    if persist_mode == "bitable":
+        return BitableStorage()
+    else:
+        # Default to JSON (covers 'local', 'repo', or any other value)
+        return JsonFileStorage(state_file)

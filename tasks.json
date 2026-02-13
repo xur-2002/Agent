@@ -1,48 +1,67 @@
 [
   {
-    "id": "daily_briefing",
-    "title": "Daily Briefing",
+    "id": "heartbeat",
+    "title": "System Heartbeat",
     "enabled": true,
     "frequency": "every_minute",
     "timezone": "UTC",
-    "params": {},
-    "status": "ok",
-    "last_run_at": "2026-02-13T08:27:34.016591+00:00",
-    "next_run_at": "2026-02-13T08:28:34.016591+00:00",
-    "last_result_summary": "Daily Briefing for 2026-02-13\nGenerated at 08:27 UTC\nStatus: Agent is running successfully.\nAll systems operational.",
-    "last_error": null
+    "params": {}
+  },
+  {
+    "id": "daily_briefing",
+    "title": "Daily Briefing",
+    "enabled": true,
+    "frequency": "once_per_day",
+    "timezone": "UTC",
+    "params": {
+      "hour": 8,
+      "minute": 0
+    }
   },
   {
     "id": "health_check_url",
     "title": "Health Check - GitHub",
     "enabled": true,
-    "frequency": "every_minute",
+    "frequency": "every_5_min",
     "timezone": "UTC",
     "params": {
       "url": "https://github.com",
       "timeout_sec": 10,
       "expected_status": 200
-    },
-    "status": "ok",
-    "last_run_at": "2026-02-13T08:27:34.336728+00:00",
-    "next_run_at": "2026-02-13T08:28:34.336728+00:00",
-    "last_result_summary": "\u2713 https://github.com returned 200 (0.32s)",
-    "last_error": null
+    }
   },
   {
     "id": "rss_watch",
-    "title": "RSS Feed Monitor",
-    "enabled": false,
+    "title": "RSS Feed - Hacker News",
+    "enabled": true,
     "frequency": "hourly",
     "timezone": "UTC",
     "params": {
       "feed_url": "https://news.ycombinator.com/rss",
-      "max_items": 3
-    },
-    "status": "scheduled",
-    "last_run_at": null,
-    "next_run_at": null,
-    "last_result_summary": null,
-    "last_error": null
+      "max_items": 5
+    }
+  },
+  {
+    "id": "github_trending_watch",
+    "title": "GitHub Trending - Python",
+    "enabled": true,
+    "frequency": "once_per_day",
+    "timezone": "UTC",
+    "params": {
+      "language": "python",
+      "since": "daily"
+    }
+  },
+  {
+    "id": "github_repo_watch",
+    "title": "GitHub Release Watch - Agent MVP",
+    "enabled": false,
+    "frequency": "once_per_day",
+    "timezone": "UTC",
+    "params": {
+      "owner": "your-github-username",
+      "repo": "agent-mvp",
+      "watch_type": "releases"
+    }
   }
 ]

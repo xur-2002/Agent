@@ -2,8 +2,8 @@ name: Agent MVP Workflow
 
 on:
   schedule:
-    # Runs every 5 minutes
-    - cron: '*/5 * * * *'
+    # Runs every minute (production-grade)
+    - cron: '* * * * *'
   
   workflow_dispatch:
     # Manual trigger from Actions tab
@@ -42,18 +42,15 @@ jobs:
         run: python -m agent.main | tee run-log.txt
       
       - name: Commit and push changes (if PERSIST_STATE=repo)
-        if: |
-          always() && 
-          (github.event.inputs.persist_state == 'yes' || 
-           env.PERSIST_STATE == 'repo')
+        if: always()
         run: |
           git config --local user.email "agent@github.com"
           git config --local user.name "Agent Workflow"
-          git add tasks.json
-          git commit -m "chore: update tasks after agent execution" || true
-          git push
-        env:
-          PERSIST_STATE: ${{ github.event.inputs.persist_state || 'none' }}
+          if [[ -f state.json ]]; then
+            git add state.json
+            git commit -m "chore: update agent state" || true
+            git push || true
+          fi
       
       - name: Upload run logs
         if: always()

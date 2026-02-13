@@ -1,0 +1,90 @@
+{
+  "heartbeat": {
+    "task_id": "heartbeat",
+    "status": "success",
+    "last_run_at": "2026-02-13T08:57:02.634494+00:00",
+    "next_run_at": "2026-02-13T08:58:02.634494+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T08:57:02.633218+00:00",
+    "last_error": null,
+    "attempts": 6,
+    "last_attempt_at": "2026-02-13T08:57:02.634494+00:00",
+    "run_id": "d95ef32a"
+  },
+  "daily_briefing": {
+    "task_id": "daily_briefing",
+    "status": "ok",
+    "last_run_at": "2026-02-13T08:54:42.615300+00:00",
+    "next_run_at": "2026-02-14T08:54:42.615300+00:00",
+    "last_result_summary": "Daily Briefing for 2026-02-13\nGenerated at 08:54 UTC\nStatus: Agent is running successfully.\nAll systems operational.",
+    "last_error": null,
+    "attempts": 1,
+    "last_attempt_at": "2026-02-13T08:54:42.615300+00:00",
+    "run_id": "892493f6"
+  },
+  "health_check_github": {
+    "task_id": "health_check_github",
+    "status": "failed",
+    "last_run_at": "2026-02-13T08:54:42.617068+00:00",
+    "next_run_at": "2026-02-13T08:59:42.617068+00:00",
+    "last_result_summary": "Task execution failed",
+    "last_error": "Unknown task ID: health_check_github",
+    "attempts": 1,
+    "last_attempt_at": "2026-02-13T08:54:42.617068+00:00",
+    "run_id": "892493f6"
+  },
+  "rss_hacker_news": {
+    "task_id": "rss_hacker_news",
+    "status": "failed",
+    "last_run_at": "2026-02-13T08:54:46.623105+00:00",
+    "next_run_at": "2026-02-13T09:54:46.623105+00:00",
+    "last_result_summary": "Task execution failed",
+    "last_error": "Unknown task ID: rss_hacker_news",
+    "attempts": 1,
+    "last_attempt_at": "2026-02-13T08:54:46.623105+00:00",
+    "run_id": "892493f6"
+  },
+  "github_trending_python": {
+    "task_id": "github_trending_python",
+    "status": "failed",
+    "last_run_at": "2026-02-13T08:54:46.623105+00:00",
+    "next_run_at": "2026-02-14T08:54:46.623105+00:00",
+    "last_result_summary": "Task execution failed",
+    "last_error": "Unknown task ID: github_trending_python",
+    "attempts": 1,
+    "last_attempt_at": "2026-02-13T08:54:46.623105+00:00",
+    "run_id": "892493f6"
+  },
+  "rss_watch": {
+    "task_id": "rss_watch",
+    "status": "failed",
+    "last_run_at": "2026-02-13T08:56:01.821229+00:00",
+    "next_run_at": "2026-02-13T09:56:01.821229+00:00",
+    "last_result_summary": "Task execution failed",
+    "last_error": "'NoneType' object has no attribute 'duration_sec'",
+    "attempts": 1,
+    "last_attempt_at": "2026-02-13T08:56:01.821229+00:00",
+    "run_id": "8de1daa8"
+  },
+  "health_check_url": {
+    "task_id": "health_check_url",
+    "status": "ok",
+    "last_run_at": "2026-02-13T08:56:02.709379+00:00",
+    "next_run_at": "2026-02-13T09:01:02.709379+00:00",
+    "last_result_summary": "\u2713 https://github.com returned 200 (0.27s)",
+    "last_error": null,
+    "attempts": 1,
+    "last_attempt_at": "2026-02-13T08:56:02.709379+00:00",
+    "run_id": "8de1daa8"
+  },
+  "github_trending_watch": {
+    "task_id": "github_trending_watch",
+    "status": "success",
+    "last_run_at": "2026-02-13T08:56:02.975882+00:00",
+    "next_run_at": "2026-02-14T08:56:02.975882+00:00",
+    "last_result_summary": "GitHub Trending in python: Monitoring active",
+    "last_error": null,
+    "attempts": 1,
+    "last_attempt_at": "2026-02-13T08:56:02.975882+00:00",
+    "run_id": "8de1daa8"
+  }
+}
