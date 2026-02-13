@@ -32,8 +32,8 @@ A minimal but real agent that runs on a schedule, executes tasks end-to-end, and
            ├──► Execute each task
            │    └──► Task Runner (dispatches by ID)
            │
-           ├──► Send results to Telegram
-           │    └──► Telegram (Bot API)
+           ├──► Send results to Feishu
+           │    └──► Feishu (Incoming Webhook)
            │
            └──► Save tasks.json
 ```
