@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T20:54:39.146289+00:00",
-    "next_run_at": "2026-02-13T20:55:39.146295+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T20:54:39.145116+00:00",
+    "last_run_at": "2026-02-13T21:11:31.805308+00:00",
+    "next_run_at": "2026-02-13T21:12:31.805321+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T21:11:31.795513+00:00",
     "last_error": null,
-    "attempts": 50,
-    "last_attempt_at": "2026-02-13T20:54:39.146301+00:00",
-    "run_id": "cd9f099e"
+    "attempts": 52,
+    "last_attempt_at": "2026-02-13T21:11:31.805332+00:00",
+    "run_id": "6b2dbc64"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
@@ -57,24 +57,24 @@
   "rss_watch": {
     "task_id": "rss_watch",
     "status": "success",
-    "last_run_at": "2026-02-13T20:04:36.671914+00:00",
-    "next_run_at": "2026-02-13T21:04:36.671921+00:00",
-    "last_result_summary": "Found 5 new items:\n\u2022 GPT-5.2 derives a new result in theoretical physics\n\u2022 Apple, fix my keyboard before the timer ends or I'm leavi...\n\u2022 Why I'm not worried about AI job loss\n\u2022 Monosketch\n\u2022 11.8M EU citizens pay taxes to governments they cannot vo...",
+    "last_run_at": "2026-02-13T21:11:32.071594+00:00",
+    "next_run_at": "2026-02-13T22:11:32.071606+00:00",
+    "last_result_summary": "Found 5 new items:\n\u2022 GPT-5.2 derives a new result in theoretical physics\n\u2022 Apple, fix my keyboard before the timer ends or I'm leavi...\n\u2022 Monosketch\n\u2022 The EU moves to kill infinite scrolling\n\u2022 Sandwich Bill of Materials",
     "last_error": null,
-    "attempts": 9,
-    "last_attempt_at": "2026-02-13T20:04:36.671929+00:00",
-    "run_id": "fa00f238"
+    "attempts": 10,
+    "last_attempt_at": "2026-02-13T21:11:32.071622+00:00",
+    "run_id": "6b2dbc64"
   },
   "health_check_url": {
     "task_id": "health_check_url",
     "status": "success",
-    "last_run_at": "2026-02-13T20:54:39.292682+00:00",
-    "next_run_at": "2026-02-13T20:59:39.292693+00:00",
-    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.15s)",
+    "last_run_at": "2026-02-13T21:11:31.954332+00:00",
+    "next_run_at": "2026-02-13T21:16:31.954348+00:00",
+    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.16s)",
     "last_error": null,
-    "attempts": 20,
-    "last_attempt_at": "2026-02-13T20:54:39.292704+00:00",
-    "run_id": "cd9f099e"
+    "attempts": 21,
+    "last_attempt_at": "2026-02-13T21:11:31.954361+00:00",
+    "run_id": "6b2dbc64"
   },
   "github_trending_watch": {
     "task_id": "github_trending_watch",
@@ -90,13 +90,13 @@
   "keyword_trend_watch": {
     "task_id": "keyword_trend_watch",
     "status": "success",
-    "last_run_at": "2026-02-13T20:04:36.320629+00:00",
-    "next_run_at": "2026-02-13T21:04:36.320637+00:00",
+    "last_run_at": "2026-02-13T21:11:31.802289+00:00",
+    "next_run_at": "2026-02-13T22:11:31.802305+00:00",
     "last_result_summary": "Monitoring 3 keyword(s):\n\u2022 ai\n\u2022 \u4e91\u8ba1\u7b97\n\u2022 web\u5f00\u53d1",
     "last_error": null,
-    "attempts": 3,
-    "last_attempt_at": "2026-02-13T20:04:36.320654+00:00",
-    "run_id": "fa00f238"
+    "attempts": 4,
+    "last_attempt_at": "2026-02-13T21:11:31.802323+00:00",
+    "run_id": "6b2dbc64"
   },
   "publish_kit_build": {
     "task_id": "publish_kit_build",
@@ -111,13 +111,13 @@
   },
   "article_generate": {
     "task_id": "article_generate",
-    "status": "failed",
-    "last_run_at": "2026-02-13T20:54:59.185085+00:00",
-    "next_run_at": "2026-02-13T20:55:59.185097+00:00",
-    "last_result_summary": "No articles were generated\n\u274c 2 article(s) failed\n\u2022 artificial intelligence: Article generation failed\n\u2022 cloud computing: Article generation failed\n",
+    "status": "success",
+    "last_run_at": "2026-02-13T21:11:38.791000+00:00",
+    "next_run_at": "2026-02-13T21:12:38.791009+00:00",
+    "last_result_summary": "\u2705 Article Generation Results\n\u2022 \u2705 Successful: 2\n\u2022 \u274c Failed: 0\n\u2022 \u2298 Skipped: 0\n\u2022 \u23f1\ufe0f Time: 7.0s\n\u2022 \ud83e\udd16 Provider: groq\n\n\u2705 Generated 2 article(s):\n  \u2022 \u4eba\u5de5\u667a\u80fd\u6982\u8ff0 (47 words)\n  \u2022 \u4e91\u8ba1\u7b97\u7684\u6982\u5ff5\u548c\u5b9a\u4e49 (47 words)\n",
     "last_error": null,
-    "attempts": 8,
-    "last_attempt_at": "2026-02-13T20:54:59.185110+00:00",
-    "run_id": "cd9f099e"
+    "attempts": 9,
+    "last_attempt_at": "2026-02-13T21:11:38.791021+00:00",
+    "run_id": "6b2dbc64"
   }
 }
