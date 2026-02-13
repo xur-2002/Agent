@@ -57,7 +57,7 @@ jobs:
       
       - name: Upload run logs
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: agent-run-logs
           path: run-log.txt
