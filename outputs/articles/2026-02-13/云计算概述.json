@@ -17,16 +17,16 @@
       "link": "https://aws.amazon.com/what-is-cloud-computing/"
     },
     {
-      "title": "Introduction to Cloud Computing - GeeksforGeeks",
-      "link": "https://www.geeksforgeeks.org/cloud-computing/cloud-computing/"
-    },
-    {
       "title": "What Is Cloud Computing? | Microsoft Azure",
       "link": "https://azure.microsoft.com/en-us/resources/cloud-computing-dictionary/what-is-cloud-computing"
+    },
+    {
+      "title": "[PDF] The NIST Definition of Cloud Computing",
+      "link": "https://nvlpubs.nist.gov/nistpubs/legacy/sp/nistspecialpublication800-145.pdf"
     }
   ],
-  "created_at": "2026-02-13T21:34:50.711480",
-  "word_count": 64,
+  "created_at": "2026-02-13T23:39:16.365059",
+  "word_count": 73,
   "sources_count": 5,
   "file_path": "outputs/articles/2026-02-13/云计算概述.md"
 }
