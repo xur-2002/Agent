@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T08:59:50.792628+00:00",
-    "next_run_at": "2026-02-13T09:00:50.792634+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T08:59:50.792258+00:00",
+    "last_run_at": "2026-02-13T09:08:13.644468+00:00",
+    "next_run_at": "2026-02-13T09:09:13.644475+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T09:08:13.641638+00:00",
     "last_error": null,
-    "attempts": 8,
-    "last_attempt_at": "2026-02-13T08:59:50.792643+00:00",
-    "run_id": "233df14e"
+    "attempts": 10,
+    "last_attempt_at": "2026-02-13T09:08:13.644501+00:00",
+    "run_id": "0bb967de"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
@@ -67,14 +67,14 @@
   },
   "health_check_url": {
     "task_id": "health_check_url",
-    "status": "ok",
-    "last_run_at": "2026-02-13T08:56:02.709379+00:00",
-    "next_run_at": "2026-02-13T09:01:02.709379+00:00",
-    "last_result_summary": "\u2713 https://github.com returned 200 (0.27s)",
+    "status": "success",
+    "last_run_at": "2026-02-13T09:08:13.689152+00:00",
+    "next_run_at": "2026-02-13T09:13:13.689160+00:00",
+    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.05s)",
     "last_error": null,
-    "attempts": 1,
-    "last_attempt_at": "2026-02-13T08:56:02.709379+00:00",
-    "run_id": "8de1daa8"
+    "attempts": 2,
+    "last_attempt_at": "2026-02-13T09:08:13.689169+00:00",
+    "run_id": "0bb967de"
   },
   "github_trending_watch": {
     "task_id": "github_trending_watch",
