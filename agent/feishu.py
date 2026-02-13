@@ -318,3 +318,129 @@ def send_alert_card(failed_tasks: List[Dict[str, Any]], run_id: str) -> None:
     response.raise_for_status()
     
     logger.debug(f"Feishu alert card sent (status: {response.status_code})")
+
+
+def send_article_generation_results(
+    successful_articles: List[Dict[str, Any]] = None,
+    failed_articles: List[Dict[str, Any]] = None,
+    total_time: float = 0,
+    run_id: str = "",
+    dry_run: bool = False
+) -> None:
+    """Send article generation results card to Feishu.
+    
+    Args:
+        successful_articles: List of successfully generated articles
+        failed_articles: List of failed article generations
+        total_time: Total execution time in seconds
+        run_id: GitHub Actions run ID (optional)
+        dry_run: Whether this was a dry run
+    
+    Raises:
+        ValueError: If FEISHU_WEBHOOK_URL is not set.
+        requests.RequestException: If the HTTP request fails.
+    """
+    if successful_articles is None:
+        successful_articles = []
+    if failed_articles is None:
+        failed_articles = []
+    
+    webhook_url = os.getenv("FEISHU_WEBHOOK_URL")
+    if not webhook_url:
+        raise ValueError("FEISHU_WEBHOOK_URL environment variable not set")
+    
+    # Build elements
+    elements = []
+    
+    # Title
+    status_emoji = "✅" if not failed_articles else "⚠️" if successful_articles else "❌"
+    title = f"{status_emoji} Article Generation Results"
+    if dry_run:
+        title += " (DRY_RUN)"
+    
+    elements.append({
+        "tag": "markdown",
+        "content": f"# {title}"
+    })
+    
+    # Summary
+    summary_text = f"📊 **Summary**\n"
+    summary_text += f"• ✅ Successful: {len(successful_articles)}\n"
+    summary_text += f"• ❌ Failed: {len(failed_articles)}\n"
+    summary_text += f"• ⏱️ Time: {total_time:.1f}s\n"
+    if run_id:
+        summary_text += f"• 🔗 Run ID: `{run_id}`"
+    
+    elements.append({
+        "tag": "markdown",
+        "content": summary_text
+    })
+    
+    # Successful articles
+    if successful_articles:
+        elements.append({
+            "tag": "markdown",
+            "content": f"### ✅ Successful Articles ({len(successful_articles)})"
+        })
+        
+        for article in successful_articles[:5]:  # Show max 5
+            article_text = f"**{article.get('title', 'Untitled')}**\n"
+            article_text += f"📌 Keyword: `{article.get('keyword', 'N/A')}`\n"
+            article_text += f"📝 Words: {article.get('word_count', 0)}\n"
+            article_text += f"📚 Sources: {article.get('sources_count', 0)}\n"
+            article_text += f"📄 File: `{article.get('file_path', 'N/A')}`"
+            
+            elements.append({
+                "tag": "markdown",
+                "content": article_text
+            })
+        
+        if len(successful_articles) > 5:
+            elements.append({
+                "tag": "markdown",
+                "content": f"_... and {len(successful_articles) - 5} more articles_"
+            })
+    
+    # Failed articles
+    if failed_articles:
+        elements.append({
+            "tag": "markdown",
+            "content": f"### ❌ Failed Articles ({len(failed_articles)})"
+        })
+        
+        for failed in failed_articles[:3]:  # Show max 3 failures
+            error_msg = failed.get('error', 'Unknown error')
+            # Truncate error message to 500 chars
+            if len(error_msg) > 500:
+                error_msg = error_msg[:500] + "..."
+            
+            failed_text = f"**{failed.get('keyword', 'Unknown')}**\n"
+            failed_text += f"❌ Error: {error_msg}"
+            
+            elements.append({
+                "tag": "markdown",
+                "content": failed_text
+            })
+        
+        if len(failed_articles) > 3:
+            elements.append({
+                "tag": "markdown",
+                "content": f"_... and {len(failed_articles) - 3} more failures_"
+            })
+    
+    # Build payload
+    payload = {
+        "msg_type": "interactive",
+        "card": {
+            "elements": elements
+        }
+    }
+    
+    try:
+        response = requests.post(webhook_url, json=payload, timeout=20)
+        response.raise_for_status()
+        logger.info(f"Feishu article results card sent: {len(successful_articles)} successful, {len(failed_articles)} failed")
+    except Exception as e:
+        logger.error(f"Failed to send Feishu card: {e}")
+        raise
+

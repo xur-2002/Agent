@@ -1,5 +1,6 @@
 """Enhanced task execution module with retry logic and new task types."""
 
+import os
 import logging
 import time
 import feedparser
@@ -465,47 +466,158 @@ def run_keyword_trend_watch(task: Task) -> TaskResult:
 
 
 def run_article_generate(task: Task) -> TaskResult:
-    """Generate article drafts from trending topics.
+    """Generate articles from keywords using search + LLM.
+    
+    Minimal cost closed-loop implementation:
+    - Uses Serper API to search (top 5 results)
+    - Uses GPT-4o-mini for article generation (cheapest model)
+    - No image generation, no email
+    - Saves articles to outputs/articles/YYYY-MM-DD/
+    - Supports DRY_RUN mode for testing
     
     Params:
-        keywords: List of keywords
-        daily_article_count: Number of articles per day
-        style: Article style (news/explainer/opinion/howto)
-        length: Article length (short/medium/long)
-        include_images: Generate cover images (true/false)
+        keywords: List of keywords to generate articles for
+        daily_article_count: Target number of articles per day (informational)
     
     Returns:
-        TaskResult with generated articles summary.
+        TaskResult with successful/failed articles list.
     """
+    from agent.article_generator import generate_article, save_article
+    from agent.content_pipeline.search import get_search_provider
+    
     params = task.params
     keywords = params.get("keywords", [])
-    count = params.get("daily_article_count", 1)
-    style = params.get("style", "news")
-    length = params.get("length", "medium")
     
     if isinstance(keywords, str):
         keywords = [keywords]
     
-    try:
-        # This is a stub - actual would generate articles
-        # using search + scrape + writer modules
-        summary = f"Article generation configured:\n"
-        summary += f"• Daily target: {count} article(s)\n"
-        summary += f"• Style: {style}\n"
-        summary += f"• Length: {length}\n"
-        summary += f"• Keywords: {', '.join(keywords[:3])}"
-        
-        return TaskResult(
-            status="success",
-            summary=summary,
-            metrics={"daily_target": count, "keywords": len(keywords)}
-        )
-    
-    except Exception as e:
+    if not keywords:
         return TaskResult(
             status="failed",
-            summary="Article generation failed",
-            error=str(e)
+            summary="No keywords provided",
+            error="keywords param is empty"
+        )
+    
+    # Check DRY_RUN mode
+    dry_run = os.getenv("DRY_RUN", "0") == "1"
+    
+    try:
+        logger.info(f"[article_generate] Starting with {len(keywords)} keyword(s), DRY_RUN={dry_run}")
+        
+        # Get search provider
+        search_provider = get_search_provider(os.getenv("SEARCH_PROVIDER", "serper"))
+        
+        successful_articles = []
+        failed_articles = []
+        start_time = now_utc()
+        
+        # Generate articles for each keyword
+        for keyword in keywords:
+            try:
+                logger.info(f"[article_generate] Processing keyword: {keyword}")
+                
+                # Search for this keyword
+                search_results = search_provider.search(keyword, limit=5)
+                
+                if not search_results:
+                    logger.warning(f"[article_generate] No search results for: {keyword}")
+                    failed_articles.append({
+                        "keyword": keyword,
+                        "error": "No search results found"
+                    })
+                    continue
+                
+                logger.debug(f"[article_generate] Found {len(search_results)} search results for {keyword}")
+                
+                # Generate article
+                article = generate_article(
+                    keyword=keyword,
+                    search_results=[
+                        {
+                            "title": r.title,
+                            "snippet": r.snippet,
+                            "link": r.url
+                        }
+                        for r in search_results
+                    ],
+                    dry_run=dry_run,
+                    language=params.get("language", "zh-CN")
+                )
+                
+                if not article:
+                    logger.error(f"[article_generate] Failed to generate article for: {keyword}")
+                    failed_articles.append({
+                        "keyword": keyword,
+                        "error": "Article generation failed"
+                    })
+                    continue
+                
+                # Save article
+                file_path = save_article(article)
+                if not file_path:
+                    logger.error(f"[article_generate] Failed to save article for: {keyword}")
+                    failed_articles.append({
+                        "keyword": keyword,
+                        "error": "Failed to save article"
+                    })
+                    continue
+                
+                # Record successful article
+                successful_articles.append({
+                    "keyword": keyword,
+                    "title": article.get("title", ""),
+                    "word_count": article.get("word_count", 0),
+                    "file_path": file_path,
+                    "sources_count": len(article.get("sources", []))
+                })
+                logger.info(f"[article_generate] Successfully generated: {article.get('title', keyword)} ({article.get('word_count', 0)} words)")
+                
+            except Exception as e:
+                logger.error(f"[article_generate] Error processing keyword {keyword}: {e}", exc_info=True)
+                failed_articles.append({
+                    "keyword": keyword,
+                    "error": str(e)[:200]
+                })
+        
+        elapsed = (now_utc() - start_time).total_seconds()
+        
+        # Build summary
+        if successful_articles:
+            summary = f"✅ Generated {len(successful_articles)} article(s) in {elapsed:.1f}s\n"
+            for article in successful_articles:
+                summary += f"• {article['title']} ({article['word_count']} words)\n"
+        else:
+            summary = "No articles were generated"
+        
+        if failed_articles:
+            summary += f"\n❌ {len(failed_articles)} article(s) failed\n"
+            for failed in failed_articles[:3]:  # Show first 3 failures
+                summary += f"• {failed['keyword']}: {failed['error']}\n"
+        
+        # Return result
+        status = "success" if successful_articles else "failed"
+        return TaskResult(
+            status=status,
+            summary=summary,
+            metrics={
+                "successful": len(successful_articles),
+                "failed": len(failed_articles),
+                "total_keywords": len(keywords),
+                "elapsed_seconds": elapsed,
+                "dry_run": dry_run
+            },
+            data={
+                "successful_articles": successful_articles,
+                "failed_articles": failed_articles
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"[article_generate] Task error: {e}", exc_info=True)
+        return TaskResult(
+            status="failed",
+            summary="Article generation task failed",
+            error=str(e)[:500]
         )
 
 

@@ -14,7 +14,7 @@ from agent.models import Task, TaskState, TaskResult
 from agent.storage import get_storage
 from agent.task_runner import run_task_with_retry, run_heartbeat
 from agent.scheduler import should_run, compute_next_run
-from agent.feishu import send_rich_card, send_alert_card
+from agent.feishu import send_rich_card, send_alert_card, send_article_generation_results
 from agent.utils import now_utc, now_iso, truncate_str
 
 # Configure logging
@@ -130,6 +130,25 @@ def main() -> int:
                             "metrics": result.metrics
                         })
                         logger.info(f"✓ [{task_id}] SUCCESS ({result.duration_sec:.2f}s)")
+                        
+                        # Send article generation results to Feishu if this is article_generate task
+                        if task_id == "article_generate" and not Config.DRY_RUN:
+                            try:
+                                data = result.data or {}
+                                successful_articles = data.get("successful_articles", [])
+                                failed_articles = data.get("failed_articles", [])
+                                dry_run = data.get("dry_run", False)
+                                
+                                logger.info(f"Sending article generation results to Feishu: {len(successful_articles)} successful, {len(failed_articles)} failed")
+                                send_article_generation_results(
+                                    successful_articles=successful_articles,
+                                    failed_articles=failed_articles,
+                                    total_time=result.duration_sec,
+                                    run_id=run_id,
+                                    dry_run=dry_run
+                                )
+                            except Exception as e:
+                                logger.warning(f"Failed to send article generation results to Feishu: {e}")
                     else:
                         all_success = False
                         failed_tasks.append({

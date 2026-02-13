@@ -78,18 +78,15 @@
   },
   {
     "id": "article_generate",
-    "title": "Article Generation",
+    "title": "Article Generation - Cheap Mode",
     "enabled": true,
     "frequency": "every_5_min",
     "timezone": "UTC",
     "params": {
-      "keywords": ["ai", "云计算", "web开发"],
-      "daily_article_count": 3,
-      "style": "news",
-      "tone": "professional",
-      "length": "medium",
-      "include_images": true,
-      "image_style": "clean editorial",
+      "keywords": ["artificial intelligence", "cloud computing", "web development", "python编程", "深度学习"],
+      "daily_article_count": 1,
+      "language": "zh-CN",
+      "include_images": false,
       "citations_required": true
     }
   },
