@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T10:50:34.007542+00:00",
-    "next_run_at": "2026-02-13T10:51:34.007547+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T10:50:34.006776+00:00",
+    "last_run_at": "2026-02-13T11:23:12.848393+00:00",
+    "next_run_at": "2026-02-13T11:24:12.848402+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T11:23:12.844904+00:00",
     "last_error": null,
-    "attempts": 14,
-    "last_attempt_at": "2026-02-13T10:50:34.007555+00:00",
-    "run_id": "2324f553"
+    "attempts": 16,
+    "last_attempt_at": "2026-02-13T11:23:12.848412+00:00",
+    "run_id": "7f3d42d2"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
@@ -57,24 +57,24 @@
   "rss_watch": {
     "task_id": "rss_watch",
     "status": "success",
-    "last_run_at": "2026-02-13T09:57:09.539803+00:00",
-    "next_run_at": "2026-02-13T10:57:09.539815+00:00",
-    "last_result_summary": "Found 5 new items:\n\u2022 MinIO repository is no longer maintained\n\u2022 Resizing windows on macOS Tahoe \u2013 the saga continues\n\u2022 MMAcevedo aka Lena by qntm\n\u2022 GPT\u20115.3\u2011Codex\u2011Spark\n\u2022 Gemini 3 Deep Think",
+    "last_run_at": "2026-02-13T11:23:13.236175+00:00",
+    "next_run_at": "2026-02-13T12:23:13.236187+00:00",
+    "last_result_summary": "Found 5 new items:\n\u2022 WolfSSL Sucks Too, So Now What?\n\u2022 MinIO repository is no longer maintained\n\u2022 Resizing windows on macOS Tahoe \u2013 the saga continues\n\u2022 MMAcevedo aka Lena by qntm\n\u2022 GPT\u20115.3\u2011Codex\u2011Spark",
     "last_error": null,
-    "attempts": 2,
-    "last_attempt_at": "2026-02-13T09:57:09.539831+00:00",
-    "run_id": "38c1a05a"
+    "attempts": 3,
+    "last_attempt_at": "2026-02-13T11:23:13.236203+00:00",
+    "run_id": "7f3d42d2"
   },
   "health_check_url": {
     "task_id": "health_check_url",
     "status": "success",
-    "last_run_at": "2026-02-13T10:50:34.166914+00:00",
-    "next_run_at": "2026-02-13T10:55:34.166936+00:00",
-    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.16s)",
+    "last_run_at": "2026-02-13T11:23:12.920976+00:00",
+    "next_run_at": "2026-02-13T11:28:12.920985+00:00",
+    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.07s)",
     "last_error": null,
-    "attempts": 4,
-    "last_attempt_at": "2026-02-13T10:50:34.166960+00:00",
-    "run_id": "2324f553"
+    "attempts": 5,
+    "last_attempt_at": "2026-02-13T11:23:12.920993+00:00",
+    "run_id": "7f3d42d2"
   },
   "github_trending_watch": {
     "task_id": "github_trending_watch",
