@@ -2,16 +2,43 @@
 
 A production-ready Python agent that runs tasks on a schedule (every minute to daily), executes them concurrently, and sends rich notifications to Feishu.
 
+## ⚡ Quick Start (3 steps, 2 minutes)
+
+### 1. Add GitHub Secrets
+
+Go to repo **Settings → Secrets and variables → Actions**, add these:
+
+| Secret Name | Value | Required |
+|---|---|---|
+| `FEISHU_WEBHOOK_URL` | Your Feishu webhook URL | ✅ Yes |
+| `GROQ_API_KEY` | Free LLM API key from https://console.groq.com | (if using article_generate) |
+| `SERPER_API_KEY` | Search enhancement (optional) | ❌ No |
+| `OPENAI_API_KEY` | Fallback LLM provider (optional) | ❌ No |
+
+### 2. Trigger Manually (or wait for automatic run)
+
+- **Manual:** Go to **Actions → Agent MVP Workflow → Run workflow**
+- **Automatic:** Workflow runs **every minute** via GitHub Actions cron (`* * * * *`)
+
+### 3. View Results
+
+- **Feishu:** Check your Feishu group for the result card
+- **Articles:** Generated articles appear in `outputs/articles/YYYY-MM-DD/*.md` and `*.json`
+- **Logs:** View in GitHub Actions workflow run details
+
+---
+
 ## What This Agent Does
 
 1. **Schedules tasks** with flexible frequency (every_minute, hourly, daily, weekly)
 2. **Executes concurrently** using ThreadPoolExecutor for efficiency
-3. **Supports multiple task types** with configurable parameters
+3. **Supports 9+ task types** with configurable parameters
 4. **Sends Feishu cards** with task results and failure alerts
-5. **Persists state** in tasks.json or optional Feishu Bitable database
-6. **Runs every 5 minutes** via GitHub Actions (minimum allowed granularity)
-7. **Supports true "every minute"** via external cron calling GitHub API
-8. **Provides detailed logging** for observability and debugging
+5. **Persists state** in `state.json` (local) or optional Feishu Bitable database
+6. **Runs every minute** via GitHub Actions cron (`* * * * *`)
+7. **Supports external triggers** via GitHub API dispatch (workflow_dispatch, repository_dispatch)
+8. **Generates articles** with Groq LLM (free) or OpenAI (paid), saves to `outputs/articles/`
+9. **Provides detailed logging** for observability and debugging
 
 ## Architecture
 
@@ -19,8 +46,8 @@ A production-ready Python agent that runs tasks on a schedule (every minute to d
 ┌──────────────────────────────────────────────────────────────────┐
 │                           TRIGGERS                               │
 ├──────────────────────────────────────────────────────────────────┤
-│ • GitHub Actions Cron (*/5 min)                                  │
-│ • Manual dispatch (workflow_dispatch)                            │
+│ • GitHub Actions Cron (every minute: * * * * *)                 │
+│ • Manual dispatch (workflow_dispatch from Actions tab)          │
 │ • External cron (Vercel/Cloudflare) → GitHub API dispatch       │
 └─────────────────────┬────────────────────────────────────────────┘
                       │
@@ -28,37 +55,40 @@ A production-ready Python agent that runs tasks on a schedule (every minute to d
 ┌──────────────────────────────────────────────────────────────────┐
 │              AGENT MAIN ORCHESTRATION                            │
 ├──────────────────────────────────────────────────────────────────┤
-│ 1. Load tasks from storage (JSON or Bitable)                     │
+│ 1. Load tasks from storage (state.json or optional Bitable)      │
 │ 2. Filter eligible tasks (enabled + should_run)                  │
 │ 3. Execute concurrently (ThreadPoolExecutor, max 4 workers)      │
 │ 4. Collect results & update task status                          │
 │ 5. Send failure alerts immediately                               │
 │ 6. Save updated tasks to storage                                 │
 │ 7. Send consolidated Feishu card                                 │
+│ 8. Commit generated articles to repo (if any)                    │
 └─────────────────────┬────────────────────────────────────────────┘
                       │
-        ┌─────────────┼─────────────┐
-        │             │             │
-        ▼             ▼             ▼
-┌─────────────┐ ┌──────────┐ ┌──────────────┐
-│ Task 1      │ │ Task 2   │ │ Task 3       │
-│ (Briefing)  │ │ (Health) │ │ (RSS Watch)  │
-└─────────────┘ └──────────┘ └──────────────┘
-        │             │             │
-        └─────────────┼─────────────┘
+        ┌─────────────┼─────────────────────────┐
+        │             │                         │
+        ▼             ▼                         ▼
+┌─────────────┐ ┌──────────────┐ ┌──────────────────┐
+│ Health      │ │ RSS Watch    │ │ Article Gen      │
+│ Check       │ │ / Trending   │ │ (Groq/OpenAI)    │
+└─────────────┘ └──────────────┘ │ → outputs/...    │
+        │             │         │ (auto-commit)    │
+        └─────────────┼─────────┘ └──────────────────┘
                       │
                       ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │        STORAGE & NOTIFICATIONS                                   │
 ├──────────────────────────────────────────────────────────────────┤
-│ • Storage: tasks.json (local) or Feishu Bitable (if env vars)   │
+│ • Storage: state.json (local) + optional Feishu Bitable         │
+│ • Outputs: outputs/articles/YYYY-MM-DD/*.md + *.json            │
 │ • Notify: Feishu webhook bot (card format)                      │
+│ • VCS: Auto-commit to main branch if enabled                     │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 ## Task Types
 
-The agent includes three built-in task types. All support the common schema:
+The agent supports 9+ built-in task types. All support the common task schema below:
 
 ### Task Schema
 
@@ -82,7 +112,7 @@ The agent includes three built-in task types. All support the common schema:
 - `id`: Unique task identifier (used to dispatch to task_runner)
 - `title`: Human-readable name
 - `enabled`: Whether task should run
-- `frequency`: `every_minute` | `hourly` | `daily` | `weekly`
+- `frequency`: `every_minute` | `hourly` | `daily` | `weekly` | `once_per_day` | `every_5_min`
 - `timezone`: IANA timezone (currently UTC only)
 - `params`: Task-specific parameters (dict)
 - `status`: Current status (scheduled | running | ok | failed)
@@ -93,96 +123,149 @@ The agent includes three built-in task types. All support the common schema:
 
 ### Built-in Tasks
 
-#### 1. `daily_briefing`
-Generates a timestamped briefing. Useful for testing and periodic reports.
+#### 1. `heartbeat`
+System heartbeat (auto-run every minute, no configuration needed).
+
+**Result:** Heartbeat timestamp
+
+---
+
+#### 2. `daily_briefing`
+Generates a timestamped briefing.
 
 **Frequency:** every_minute, hourly, daily, etc.  
 **Params:** (none)  
-**Result:** Brief status message with timestamp
+**Result:** Timestamped briefing message
 
-**Example tasks.json entry:**
-```json
-{
-  "id": "daily_briefing",
-  "title": "Daily Briefing",
-  "enabled": true,
-  "frequency": "every_minute",
-  "timezone": "UTC",
-  "params": {}
-}
-```
+---
 
-#### 2. `health_check_url`
-Checks HTTP endpoint availability and response status.
+#### 3. `health_check_url`
+Checks HTTP endpoint availability.
 
-**Frequency:** every_minute, hourly, daily, etc.  
 **Params:**
 - `url` (required): URL to check
-- `timeout_sec` (default 10): HTTP request timeout
-- `expected_status` (default 200): Expected HTTP status code
+- `timeout_sec` (default 10): HTTP timeout
+- `expected_status` (default 200): Expected HTTP status
 
-**Result:** Response time, actual status code, pass/fail
+**Result:** Response time, status, pass/fail
 
-**Example tasks.json entry:**
-```json
-{
-  "id": "health_check_url",
-  "title": "Health Check - GitHub",
-  "enabled": true,
-  "frequency": "every_minute",
-  "timezone": "UTC",
-  "params": {
-    "url": "https://github.com",
-    "timeout_sec": 10,
-    "expected_status": 200
-  }
-}
-```
+---
 
-#### 3. `rss_watch`
+#### 4. `rss_watch`
 Monitors an RSS feed for new items.
 
-**Frequency:** hourly, daily, etc.  
 **Params:**
 - `feed_url` (required): URL to RSS feed
-- `max_items` (default 3): Number of recent items to check
+- `max_items` (default 3): Number of items to check
 - `last_seen_guid` (auto-managed): GUID of last seen item
 
 **Result:** Count of new items, feed title
 
-**Example tasks.json entry:**
-```json
-{
-  "id": "rss_watch",
-  "title": "RSS Monitor",
-  "enabled": true,
-  "frequency": "hourly",
-  "timezone": "UTC",
-  "params": {
-    "feed_url": "https://news.ycombinator.com/rss",
-    "max_items": 3
-  }
-}
-```
+---
+
+#### 5. `github_trending_watch`
+Monitors trending repositories on GitHub by language.
+
+**Params:**
+- `language` (default python): GitHub language filter
+- `since` (default daily): daily | weekly | monthly
+
+**Result:** Top 5 trending repos with star growth
+
+---
+
+#### 6. `github_repo_watch`
+Watches a specific GitHub repository for releases and activity.
+
+**Params:**
+- `owner` (required): GitHub username
+- `repo` (required): Repository name
+- `watch_type` (default releases): releases | commits | discussions
+
+**Result:** Latest release/activity info
+
+---
+
+#### 7. `keyword_trend_watch`
+Monitors keyword trends using search API (Serper).
+
+**Params:**
+- `keywords` (required): Array of keywords to watch
+- `region` (default zh-CN): Region/language code
+- `search_provider` (default serper): serper | google
+
+**Result:** Search volume and trend change
+
+---
+
+#### 8. `article_generate`
+Generates articles using LLM (Groq/OpenAI) based on keywords.
+
+**Frequency:** every_minute, hourly, daily, etc.  
+**Params:**
+- `keywords` (required): Array of keywords to write about
+- `language` (default zh-CN): Output language
+- `include_images` (default false): Fetch images for articles
+- `citations_required` (default true): Include source citations
+- `daily_article_count` (default 1): Max articles per keyword
+
+**Result:** Generated articles saved to `outputs/articles/YYYY-MM-DD/` + Feishu card
+
+**Environment:**
+- `LLM_PROVIDER`: groq (free) | openai (paid) | dry_run (mock)
+- `GROQ_API_KEY`: Get from https://console.groq.com (free)
+- `OPENAI_API_KEY`: Optional fallback
+- `SERPER_API_KEY`: For search enrichment (optional)
+
+---
+
+#### 9. `publish_kit_build`
+Builds publish kits for content distribution platforms.
+
+**Params:**
+- `hour` (default 18): Hour to run (UTC)
+- `platforms` (optional): Target platforms list
+
+**Result:** Generate publish kits for WeChat, Xiaohongshu, etc.
 
 ## Scheduling & Frequency
 
 ### Frequency Options
 
-| Frequency | Minimum interval | Use case |
-|-----------|------------------|----------|
+| Frequency | Interval | Typical Use |
+|-----------|----------|-------------|
 | `every_minute` | 60 seconds | Real-time monitoring, polling |
-| `hourly` | 1 hour | Regular checks |
-| `daily` | 1 day | Daily reports, once-per-day jobs |
+| `every_5_min` | 5 minutes | Frequent checks with less overhead |
+| `hourly` | 1 hour | Regular checks, feeds, trends |
+| `once_per_day` | 1 day at specified hour | Daily reports, article generation |
+| `daily` | 1 day | Daily task execution |
 | `weekly` | 7 days | Weekly summaries |
 
-### GitHub Actions Limits
+### GitHub Actions Cron
 
-**GitHub Actions minimum cron granularity is 5 minutes.** Therefore:
+The workflow runs on **GitHub Actions cron schedule: `* * * * *`** (every minute).
 
-- **Agent runs every 5 minutes** via `cron: '*/5 * * * *'`
-- **Each task checks its own frequency** (if last run was < 60 seconds ago for every_minute, it skips)
-- **To achieve true every-minute triggering**, use external cron (see below)
+- **Actual run interval:** Every minute (GitHub now supports this with standard runners)
+- **Agent behavior:** Each run checks task frequency and skips if not due
+- **Example:** A task with `frequency: "daily"` will only execute when `should_run()` returns true
+
+### State Persistence
+
+State is persisted to **`state.json`** in the repository root:
+- **Format:** JSON with task execution history and metadata
+- **Auto-updated:** After each agent run
+- **Manual persistence:** Set `PERSIST_STATE=repo` in workflow to commit state.json to repo
+
+### Optional: True "Every Minute" via External Cron
+
+If you use the built-in GitHub Actions cron (`* * * * *`), you're already getting every-minute triggering. 
+
+For even more frequent triggering or outside GitHub infrastructure, you can use external cron:
+- **Vercel Cron** (recommended for ease)
+- **Cloudflare Workers** (advanced)
+- **Your own server** with cron job
+
+See [Achieving True "Every Minute" Triggering](#achieving-true-every-minute-triggering) section below.
 
 ## Running Locally
 
@@ -241,32 +324,65 @@ Agent run completed in 0.48s
 
 ## GitHub Actions Setup
 
-### 1. Add Secrets to Repository
+### Step 1: Add Required Secrets
 
-1. Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions**
-2. Add new secret:
-   - **Name:** `FEISHU_WEBHOOK_URL`
-   - **Value:** `https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-id`
+Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions**
 
-### 2. Trigger Agent Manually
+Add these secrets:
 
-1. Go to **Actions** tab
+| Secret Name | Details | Required |
+|---|---|---|
+| `FEISHU_WEBHOOK_URL` | Your Feishu bot webhook URL | ✅ Required |
+| `GROQ_API_KEY` | Free LLM API from https://console.groq.com | For article_generate task |
+| `OPENAI_API_KEY` | OpenAI API key (fallback LLM) | Optional |
+| `SERPER_API_KEY` | Search enrichment API | Optional |
+
+**Note:** All other env vars (LLM_PROVIDER, etc.) have sensible defaults and can be set as **Variables** if you want to change them per environment.
+
+### Step 2: Verify the Workflow
+
+The workflow file is `.github/workflows/agent.yml`:
+- **Name:** Agent MVP Workflow
+- **Triggers:** 
+  - Cron: `* * * * *` (every minute)
+  - Manual: `workflow_dispatch` (run from Actions tab)
+  - GitHub API: `repository_dispatch` (external HTTP triggers)
+
+### Step 3: Manual Trigger (First Test)
+
+1. Go to your repo → **Actions** tab
 2. Select **"Agent MVP Workflow"** on the left
-3. Click **"Run workflow"**
-4. (Optional) Check "Persist state to repo" → Set to "yes" if you want tasks.json updated in repo
-5. Click **"Run workflow"** again
-6. Workflow should complete in ~10 seconds
-7. Check your Feishu group for result card
+3. Click **"Run workflow"** button
+4. Click **"Run workflow"** again to confirm
+5. Wait ~30-60 seconds for completion
+6. Check your Feishu group for the result card
 
-### 3. View Logs
+### Step 4: Automatic Runs
 
-- Click the completed workflow run
-- Click "run_agent" job
-- Scroll to see detailed logs
+Once configured, the workflow runs automatically every minute. Check:
+- **GitHub Actions logs:** Actions tab → latest run
+- **Feishu cards:** Should arrive in your workspace every minute (or per task frequency)
+- **Generated articles:** If `article_generate` is enabled, check `outputs/articles/YYYY-MM-DD/` in the repo
 
-## Achieving True "Every Minute" Triggering
+### Step 5: View Generated Content
 
-GitHub Actions only supports **5-minute minimum** for scheduled workflows. To trigger the agent every minute:
+Generated articles from the `article_generate` task are saved to:
+
+```
+outputs/
+  articles/
+    2026-02-13/
+      article-title.md       # Markdown content
+      article-title.json     # Metadata (title, keywords, word_count, etc.)
+```
+
+Files are automatically committed to the repo if git operations succeed.
+
+---
+
+## Achieving Sub-Minute Triggering (Optional)
+
+The built-in GitHub Actions cron supports **every minute triggering** (`* * * * *`). If you need **more frequent execution** (e.g., every 30 seconds), use external cron services:
 
 ### Option A: Vercel Cron (Recommended for ease)
 
@@ -280,7 +396,7 @@ Vercel offers free cron jobs that can call external URLs.
   "crons": [
     {
       "path": "/api/trigger-agent",
-      "schedule": "* * * * *"
+      "schedule": "*/1 * * * *"
     }
   ]
 }
@@ -339,7 +455,7 @@ Create a Cloudflare Worker with cron trigger:
 ```javascript
 // wrangler.toml
 [env.production]
-triggers.crons = ["* * * * *"]
+triggers.crons = ["*/1 * * * *"]
 
 // src/index.js
 export default {
@@ -459,57 +575,77 @@ python -m agent.main
 
 ### Default: JSON File Storage
 
-**How it works:**
-- Tasks stored in `tasks.json` in repo root
-- Loaded on every run
-- Atomic writes prevent corruption (write to temp file, then replace)
-- No credentials needed
+The agent uses a two-file approach:
 
-**Best for:** Small teams, simple setups, CI/CD friendly
+1. **`tasks.json`** - Task definitions (static, rarely changes)
+   - Loaded on each run
+   - Contains task configuration, parameters, frequency, etc.
+   - Edit manually to add/remove tasks
+
+2. **`state.json`** - Task execution state (dynamic, auto-updated)
+   - Saved after each run
+   - Contains last_run_at, next_run_at, status, last_error, etc.
+   - Tracks task execution history
+   - Optional: commit to repo via `PERSIST_STATE=repo`
+
+**Best for:** Small teams, simple setups, CI/CD friendly, no additional credentials
 
 ### Optional: Feishu Bitable Storage
 
-**How it works:**
-- Tasks stored in a Feishu Bitable (multi-dimensional table)
-- Avoids repo commits on every run
-- Requires Feishu App credentials
+Instead of (or in addition to) JSON files, tasks can be stored in a Feishu Bitable (multi-dimensional table):
+
+**Advantages:**
+- Centralized task management
+- Web UI for editing
+- No repo clutter from frequent state commits
+- Shared access across team
 
 **Setup:**
 
-1. Create a Feishu App:
-   - Go to [Feishu Developer Console](https://open.feishu.cn/app)
-   - Create new app
-   - Copy **App ID** and **App Secret**
+1. Create a Feishu App (if not exists)
+2. Create a Bitable with columns: id, title, enabled, frequency, timezone, params, status, last_run_at, etc.
+3. Add GitHub Secrets for app credentials
+4. Agent auto-detects and uses Bitable if env vars are set
 
-2. Create a Bitable:
-   - Go to Feishu desktop app
-   - Create new Bitable
-   - Add columns: id, title, enabled, frequency, timezone, params, status, last_run_at, next_run_at, last_result_summary, last_error
+**Best for:** Large teams, avoid repo clutter, centralized management
 
-3. Grant API permissions to your app
-
-4. Add GitHub Secrets:
-   - `FEISHU_APP_ID`: Your app ID
-   - `FEISHU_APP_SECRET`: Your app secret
-   - `FEISHU_BITABLE_APP_TOKEN`: From Bitable sharing link
-   - `FEISHU_BITABLE_TABLE_ID`: From Bitable dashboard
-
-5. Agent will automatically detect and use Bitable
-
-**Best for:** Large teams, avoid repo clutter, centralized task management
+**Note:** Currently using local JSON storage. Bitable support available via optional env vars.
 
 ## Configuration Options
 
-### Environment Variables
+### Environment Variables (from .env.example)
 
-| Variable | Purpose | Default | Example |
-|----------|---------|---------|---------|
-| `FEISHU_WEBHOOK_URL` | Webhook for notifications | (required) | `https://open.feishu.cn/...` |
-| `PERSIST_STATE` | Save tasks to repo | `none` | `repo` or `none` |
-| `FEISHU_APP_ID` | Bitable app ID | (optional) | `cli_xxx` |
-| `FEISHU_APP_SECRET` | Bitable app secret | (optional) | `xxx` |
-| `FEISHU_BITABLE_APP_TOKEN` | Bitable token | (optional) | `xxx` |
-| `FEISHU_BITABLE_TABLE_ID` | Bitable table ID | (optional) | `tblxxx` |
+| Variable | Purpose | Default | Example | Required |
+|----------|---------|---------|---------|----------|
+| `FEISHU_WEBHOOK_URL` | Feishu bot webhook | (none) | `https://open.feishu.cn/...` | ✅ Yes |
+| `FEISHU_MENTION` | User ID to mention on failures | (none) | `ou_xxx` | ❌ No |
+| `LLM_PROVIDER` | Which LLM to use | groq | groq \| openai \| dry_run | For article_generate |
+| `GROQ_API_KEY` | Groq API key (free) | (none) | `gsk_...` | For groq provider |
+| `GROQ_MODEL` | Groq model to use | llama-3.1-8b-instant | llama-3.1-8b-instant | Auto |
+| `OPENAI_API_KEY` | OpenAI API key (paid) | (none) | `sk_...` | For openai provider |
+| `OPENAI_MODEL` | OpenAI model to use | gpt-4o-mini | gpt-4o-mini | Auto |
+| `SERPER_API_KEY` | Search enrichment API | (none) | `xxx` | For keyword searches |
+| `PERSIST_STATE` | Save state to repo | local | local \| repo \| bitable | Auto |
+| `STATE_FILE` | Where to save state | state.json | state.json | Auto |
+| `MAX_CONCURRENCY` | Max concurrent tasks | 5 | 1-10 | Auto |
+| `RETRY_COUNT` | Number of retries | 2 | 0-5 | Auto |
+
+### LLM Provider Setup (for article_generate task)
+
+**Option A: Use free Groq (recommended)**
+1. Go to https://console.groq.com
+2. Sign up (free, no credit card needed)
+3. Create API key
+4. Add `GROQ_API_KEY` to GitHub Secrets
+
+**Option B: Use paid OpenAI (optional fallback)**
+1. Go to https://platform.openai.com
+2. Add payment method
+3. Create API key
+4. Add `OPENAI_API_KEY` to GitHub Secrets
+5. (Optional) Set `LLM_PROVIDER=openai` in GitHub Variables
+
+**Fallback behavior:** If LLM_PROVIDER is groq but GROQ_API_KEY is missing, automatically tries openai (if available), then dry_run (mock).
 
 ## Logging & Observability
 
@@ -611,20 +747,19 @@ print('Should run:', should_run(task))  # Should print True
 
 ## License
 
-Open source. Use as you wish.
+Open source. No LICENSE file currently. Use as you wish. Consider adding a LICENSE file (MIT, Apache 2.0, etc.) if publishing.
 
 ---
 
-## Quick Reference Checklist
+## Changelog (README only)
 
-- [ ] Set `FEISHU_WEBHOOK_URL` secret in GitHub
-- [ ] Test locally: `export FEISHU_WEBHOOK_URL=...; python -m agent.main`
-- [ ] Verify Feishu card received
-- [ ] (Optional) Set `PERSIST_STATE=repo` if you want tasks.json committed
-- [ ] (Optional) Set up external cron for true every-minute triggering
-- [ ] Add new tasks to tasks.json and implement handlers in task_runner.py
-- [ ] Monitor logs in GitHub Actions
-
----
-
-**Ready to go!** The agent runs every 5 minutes via GitHub Actions, supports every-minute via external cron, and scales to dozens of concurrent tasks. 🚀
+**Changes made to align with actual repo behavior:**
+- ✅ Added Quick Start section (3 steps) at top
+- ✅ Fixed cron schedule: `* * * * *` (every minute), not `*/5` (every 5 min)
+- ✅ Expanded task list from 3 to 9 types (added heartbeat, github_trending_watch, github_repo_watch, keyword_trend_watch, article_generate, publish_kit_build)
+- ✅ Documented article generation output path: `outputs/articles/YYYY-MM-DD/*.md + *.json`
+- ✅ Clarified state persistence: uses `state.json` + `tasks.json`, not just `tasks.json`
+- ✅ Updated env variables table with actual LLM_PROVIDER, GROQ_API_KEY, OPENAI_API_KEY, SERPER_API_KEY from workflow and .env.example
+- ✅ Documented Groq free LLM provider setup (new feature)
+- ✅ Removed "5-minute minimum" claim (GitHub now supports 1-minute cron)
+- ✅ Updated architecture diagram to show article generation pipeline and outputs commit
