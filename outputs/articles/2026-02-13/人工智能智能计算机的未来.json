@@ -1,0 +1,32 @@
+{
+  "title": "人工智能：智能计算机的未来",
+  "keyword": "artificial intelligence",
+  "provider": "groq",
+  "model": "llama-3.1-8b-instant",
+  "sources": [
+    {
+      "title": "Artificial intelligence - Wikipedia",
+      "link": "https://en.wikipedia.org/wiki/Artificial_intelligence"
+    },
+    {
+      "title": "What Is Artificial Intelligence (AI)? - IBM",
+      "link": "https://www.ibm.com/think/topics/artificial-intelligence"
+    },
+    {
+      "title": "AIJ | Artificial Intelligence | Journal | ScienceDirect.com by Elsevier",
+      "link": "https://www.sciencedirect.com/journal/artificial-intelligence"
+    },
+    {
+      "title": "What is Artificial Intelligence (AI)? | Google Cloud",
+      "link": "https://cloud.google.com/learn/what-is-artificial-intelligence"
+    },
+    {
+      "title": "人工智能- 维基百科，自由的百科全书",
+      "link": "https://zh.wikipedia.org/zh-cn/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD"
+    }
+  ],
+  "created_at": "2026-02-13T22:49:32.880375",
+  "word_count": 55,
+  "sources_count": 5,
+  "file_path": "outputs/articles/2026-02-13/人工智能智能计算机的未来.md"
+}
