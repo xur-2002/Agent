@@ -32,6 +32,23 @@ class Config:
     FEISHU_TABLE_TABLE_ID: str = os.getenv("FEISHU_TABLE_TABLE_ID", "")
     FEISHU_APP_ID: str = os.getenv("FEISHU_APP_ID", "")
     FEISHU_APP_SECRET: str = os.getenv("FEISHU_APP_SECRET", "")
+    
+    # Content pipeline (Direction 1)
+    SEARCH_PROVIDER: str = os.getenv("SEARCH_PROVIDER", "serper")
+    SERPER_API_KEY: str = os.getenv("SERPER_API_KEY", "")
+    BING_SEARCH_KEY: str = os.getenv("BING_SEARCH_KEY", "")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    
+    # Email delivery
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASS: str = os.getenv("SMTP_PASS", "")
+    SMTP_TO: str = os.getenv("SMTP_TO", "")
+    
+    # Content directories
+    CONTENT_DRAFTS_DIR: str = os.getenv("CONTENT_DRAFTS_DIR", "drafts")
+    CONTENT_PUBLISH_KITS_DIR: str = os.getenv("CONTENT_PUBLISH_KITS_DIR", "publish_kits")
 
     @classmethod
     def validate(cls) -> None:

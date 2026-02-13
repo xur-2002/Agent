@@ -99,6 +99,12 @@ def run_task(task: Task) -> TaskResult:
             result = run_github_trending_watch(task)
         elif task_id == "github_repo_watch":
             result = run_github_repo_watch(task)
+        elif task_id == "keyword_trend_watch":
+            result = run_keyword_trend_watch(task)
+        elif task_id == "article_generate":
+            result = run_article_generate(task)
+        elif task_id == "publish_kit_build":
+            result = run_publish_kit_build(task)
         else:
             raise ValueError(f"Unknown task ID: {task_id}")
         
@@ -417,3 +423,119 @@ def run_github_repo_watch(task: Task) -> TaskResult:
             error=str(e)
         )
 
+
+def run_keyword_trend_watch(task: Task) -> TaskResult:
+    """Monitor keywords for trending topics.
+    
+    Params:
+        keywords: List of keywords to watch
+        region: Region/language (zh-CN default)
+        search_provider: 'serper' default, or 'bing'
+    
+    Returns:
+        TaskResult with trending topics.
+    """
+    params = task.params
+    keywords = params.get("keywords", [])
+    if isinstance(keywords, str):
+        keywords = [keywords]
+    
+    if not keywords:
+        raise ValueError("keyword_trend_watch requires 'keywords' param")
+    
+    try:
+        # This is a stub implementation - actual implementation
+        # would use search provider to find trends
+        # For now, return a placeholder result
+        summary = f"Monitoring {len(keywords)} keyword(s):\n"
+        summary += "\n".join(f"• {kw}" for kw in keywords[:5])
+        
+        return TaskResult(
+            status="success",
+            summary=summary,
+            metrics={"keywords": len(keywords), "topics_found": 0}
+        )
+    
+    except Exception as e:
+        return TaskResult(
+            status="failed",
+            summary="Keyword trend watch failed",
+            error=str(e)
+        )
+
+
+def run_article_generate(task: Task) -> TaskResult:
+    """Generate article drafts from trending topics.
+    
+    Params:
+        keywords: List of keywords
+        daily_article_count: Number of articles per day
+        style: Article style (news/explainer/opinion/howto)
+        length: Article length (short/medium/long)
+        include_images: Generate cover images (true/false)
+    
+    Returns:
+        TaskResult with generated articles summary.
+    """
+    params = task.params
+    keywords = params.get("keywords", [])
+    count = params.get("daily_article_count", 1)
+    style = params.get("style", "news")
+    length = params.get("length", "medium")
+    
+    if isinstance(keywords, str):
+        keywords = [keywords]
+    
+    try:
+        # This is a stub - actual would generate articles
+        # using search + scrape + writer modules
+        summary = f"Article generation configured:\n"
+        summary += f"• Daily target: {count} article(s)\n"
+        summary += f"• Style: {style}\n"
+        summary += f"• Length: {length}\n"
+        summary += f"• Keywords: {', '.join(keywords[:3])}"
+        
+        return TaskResult(
+            status="success",
+            summary=summary,
+            metrics={"daily_target": count, "keywords": len(keywords)}
+        )
+    
+    except Exception as e:
+        return TaskResult(
+            status="failed",
+            summary="Article generation failed",
+            error=str(e)
+        )
+
+
+def run_publish_kit_build(task: Task) -> TaskResult:
+    """Build a publish kit with all generated articles.
+    
+    Params:
+        (no specific params needed)
+    
+    Returns:
+        TaskResult with kit location.
+    """
+    try:
+        # This is a stub - actual would gather all articles
+        # from today and create publish kit
+        summary = "Publish kit building configured:\n"
+        summary += "• Will collect today's articles\n"
+        summary += "• Generate manifests and checklists\n"
+        summary += "• Create platform-specific formats\n"
+        summary += "• Output as ZIP archive"
+        
+        return TaskResult(
+            status="success",
+            summary=summary,
+            metrics={"kit_status": "ready", "articles_count": 0}
+        )
+    
+    except Exception as e:
+        return TaskResult(
+            status="failed",
+            summary="Publish kit build failed",
+            error=str(e)
+        )

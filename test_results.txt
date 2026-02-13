@@ -1,0 +1,39 @@
+test_keyword_frequency_matters (__main__.TestHeatScoreDeterministic.test_keyword_frequency_matters)
+Sources with more keyword mentions should score higher. ... ok
+test_more_sources_higher_score (__main__.TestHeatScoreDeterministic.test_more_sources_higher_score)
+More sources should generally increase score. ... ok
+test_same_sources_same_score (__main__.TestHeatScoreDeterministic.test_same_sources_same_score)
+Same sources should produce identical scores. ... ok
+test_score_range (__main__.TestHeatScoreDeterministic.test_score_range)
+Heat score should always be between 0 and 100. ... ok
+test_basic_slug (__main__.TestSlugify.test_basic_slug)
+Basic text should slugify correctly. ... ok
+test_chinese_characters (__main__.TestSlugify.test_chinese_characters)
+Chinese characters should be converted or removed. ... ok
+test_empty_string (__main__.TestSlugify.test_empty_string)
+Empty string should return empty string. ... ok
+test_lowercase_conversion (__main__.TestSlugify.test_lowercase_conversion)
+Output should be lowercase. ... ok
+test_max_length (__main__.TestSlugify.test_max_length)
+Slug should respect max length. ... ok
+test_spaces_to_hyphens (__main__.TestSlugify.test_spaces_to_hyphens)
+Spaces should be converted to hyphens. ... ok
+test_special_characters_removed (__main__.TestSlugify.test_special_characters_removed)
+Special characters should be removed. ... ok
+test_article_rendering (__main__.TestMarkdownToHtml.test_article_rendering)
+Article rendering should work without errors. ... ok
+test_html_escaping (__main__.TestMarkdownToHtml.test_html_escaping)
+HTML entities should be properly escaped. ... ok
+test_task_objects_exist (__main__.TestTaskConfigValidation.test_task_objects_exist)
+Task objects should exist in tasks. ... ok
+test_tasks_json_parseable (__main__.TestTaskConfigValidation.test_tasks_json_parseable)
+tasks.json should be valid JSON. ... ok
+test_config_loads (__main__.TestConfigIntegration.test_config_loads)
+Config should load without errors. ... ok
+test_required_content_pipeline_fields (__main__.TestConfigIntegration.test_required_content_pipeline_fields)
+Config should have required content pipeline fields. ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 0.002s
+
+OK

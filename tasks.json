@@ -63,5 +63,45 @@
       "repo": "agent-mvp",
       "watch_type": "releases"
     }
+  },
+  {
+    "id": "keyword_trend_watch",
+    "title": "Keyword Trend Watch",
+    "enabled": true,
+    "frequency": "hourly",
+    "timezone": "UTC",
+    "params": {
+      "keywords": ["ai", "云计算", "web开发"],
+      "region": "zh-CN",
+      "search_provider": "serper"
+    }
+  },
+  {
+    "id": "article_generate",
+    "title": "Article Generation",
+    "enabled": true,
+    "frequency": "every_5_min",
+    "timezone": "UTC",
+    "params": {
+      "keywords": ["ai", "云计算", "web开发"],
+      "daily_article_count": 3,
+      "style": "news",
+      "tone": "professional",
+      "length": "medium",
+      "include_images": true,
+      "image_style": "clean editorial",
+      "citations_required": true
+    }
+  },
+  {
+    "id": "publish_kit_build",
+    "title": "Publish Kit Builder",
+    "enabled": true,
+    "frequency": "once_per_day",
+    "timezone": "UTC",
+    "params": {
+      "hour": 18,
+      "minute": 0
+    }
   }
 ]
