@@ -1,8 +1,12 @@
-# Agent MVP - Production-Grade Task Scheduler
+# Agent MVP - Autonomous Task Automation for Content & Monitoring
 
-A production-ready Python agent that runs tasks on a schedule (every minute to daily), executes them concurrently, and sends rich notifications to Feishu.
+A **production-ready Python agent** that automatically runs monitoring and content generation tasks every minute, executes them concurrently, and sends real-time updates to Feishu via rich interactive cards.
 
-## ⚡ Quick Start (3 steps, 2 minutes)
+**Core Mission:** Zero-cost article generation + multi-source monitoring + real-time notifications = fully autonomous content production pipeline.
+
+---
+
+## 🎯 What You Get (In 30 Seconds)
 
 ### 1. Add GitHub Secrets
 
@@ -57,7 +61,7 @@ Go to repo **Settings → Secrets and variables → Actions**, add these:
 ├──────────────────────────────────────────────────────────────────┤
 │ 1. Load tasks from storage (state.json or optional Bitable)      │
 │ 2. Filter eligible tasks (enabled + should_run)                  │
-│ 3. Execute concurrently (ThreadPoolExecutor, max 4 workers)      │
+│ 3. Execute concurrently (ThreadPoolExecutor, max 5 workers)      │
 │ 4. Collect results & update task status                          │
 │ 5. Send failure alerts immediately                               │
 │ 6. Save updated tasks to storage                                 │
@@ -204,17 +208,38 @@ Generates articles using LLM (Groq/OpenAI) based on keywords.
 **Frequency:** every_minute, hourly, daily, etc.  
 **Params:**
 - `keywords` (required): Array of keywords to write about
-- `language` (default zh-CN): Output language
-- `include_images` (default false): Fetch images for articles
-- `citations_required` (default true): Include source citations
-- `daily_article_count` (default 1): Max articles per keyword
+- `language` (default zh-CN): Output language (zh-CN | en-US)
 
-**Result:** Generated articles saved to `outputs/articles/YYYY-MM-DD/` + Feishu card
+**Flow for each keyword:**
+1. **Search** (optional): If SERPER_API_KEY is set, search for keyword context
+2. **Generate**: Call LLM API with search results + prompt (Groq/OpenAI/DRY_RUN)
+3. **Save**: Write both `.md` (content) and `.json` (metadata) to `outputs/articles/YYYY-MM-DD/`
+4. **Notify**: Send Feishu card with article title, word count, provider, model
+
+**Error Handling** (6 exception types):
+- `MissingAPIKeyError` (non-retriable): No API key configured → **skip** remaining keywords
+- `InsufficientQuotaError` (non-retriable): Billing/quota issue → **skip** remaining keywords
+- `RateLimitError` (retriable): API throttled → **fail** this keyword, **continue** with others
+- `TransientError` (retriable): Network timeout → **fail** this keyword, **continue** with others
+- `LLMProviderError` (retriable/non-retriable flag): Generic provider error
+- Generic `Exception`: **fail** this keyword, **continue** with others
+
+**Task Status Logic:**
+- ✅ `success`: At least 1 keyword generated successfully
+- ⊘ `skipped`: All keywords skipped (due to missing key/quota)
+- ❌ `failed`: Some keywords failed (can be retried in next run)
+
+**Result:** 
+- Generated articles in `outputs/articles/YYYY-MM-DD/` with metadata
+- Feishu card with: successful ✅ + failed ❌ + skipped ⊘ breakdown
+- Auto-commit articles to repo (if enabled via PERSIST_STATE=repo)
 
 **Environment:**
-- `LLM_PROVIDER`: groq (free) | openai (paid) | dry_run (mock)
-- `GROQ_API_KEY`: Get from https://console.groq.com (free)
-- `OPENAI_API_KEY`: Optional fallback
+- `LLM_PROVIDER`: groq (free, default) | openai (paid) | dry_run (mock)
+- `GROQ_API_KEY`: Get from https://console.groq.com (free, no credit card)
+- `GROQ_MODEL`: llama-3.1-8b-instant (default)
+- `OPENAI_API_KEY`: Optional fallback (requires paid plan)
+- `OPENAI_MODEL`: gpt-4o-mini (default)
 - `SERPER_API_KEY`: For search enrichment (optional)
 
 ---
@@ -628,7 +653,7 @@ Instead of (or in addition to) JSON files, tasks can be stored in a Feishu Bitab
 | `PERSIST_STATE` | Save state to repo | local | local \| repo \| bitable | Auto |
 | `STATE_FILE` | Where to save state | state.json | state.json | Auto |
 | `MAX_CONCURRENCY` | Max concurrent tasks | 5 | 1-10 | Auto |
-| `RETRY_COUNT` | Number of retries | 2 | 0-5 | Auto |
+| `RETRY_BACKOFF` | Retry backoff times | 1s,3s,7s | Comma-separated delays | Auto |
 
 ### LLM Provider Setup (for article_generate task)
 
