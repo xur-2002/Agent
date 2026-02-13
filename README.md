@@ -1,12 +1,12 @@
 # Agent MVP
 
-A minimal but real agent that runs on a schedule, executes tasks end-to-end, and notifies you via Telegram with results and logs.
+A minimal but real agent that runs on a schedule, executes tasks end-to-end, and notifies you via Feishu with results and logs.
 
 ## What This Agent Does
 
 1. **Loads pending tasks** from `tasks.json`
 2. **Executes tasks** (currently supports `daily_briefing`)
-3. **Sends results** to Telegram via Bot API
+3. **Sends results** to Feishu via Incoming Webhook Bot
 4. **Updates task status** (pending → done or failed)
 5. **Handles failures gracefully** with error alerts
 6. **Runs on a schedule** via GitHub Actions (daily at 09:00 UTC) or manually
@@ -42,9 +42,11 @@ A minimal but real agent that runs on a schedule, executes tasks end-to-end, and
 
 - **Python 3.11+**
 - **requests library** (for HTTP requests)
-- **Telegram Bot**: Create one via [@BotFather](https://t.me/botfather) to get:
-  - `TELEGRAM_BOT_TOKEN`
-  - `TELEGRAM_CHAT_ID` (your personal chat or group ID)
+- **Feishu (Lark) Workspace**: You need access to add a webhook bot. Follow these steps to get your webhook URL:
+  1. In your Feishu group, open the group details
+  2. Go to **Settings** → **Manage members and permissions** → **Developer settings** or **Group Settings** → **Add bot**
+  3. Create an "Incoming Webhook" bot
+  4. Copy the webhook URL (looks like `https://open.feishu.cn/open-apis/bot/v2/hook/...`)
 
 ## Local Setup and Run
 
@@ -77,20 +79,17 @@ pip install -r requirements.txt
 
 ### 4. Set environment variables
 
-**On macOS/Linux:**
-```bash
-export TELEGRAM_BOT_TOKEN="your_bot_token_here"
-export TELEGRAM_CHAT_ID="your_chat_id_here"
+**On maFEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-id"
 ```
 
 **On Windows (PowerShell):**
 ```powershell
-$env:TELEGRAM_BOT_TOKEN = "your_bot_token_here"
-$env:TELEGRAM_CHAT_ID = "your_chat_id_here"
+$env:FEISHU_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-id"
 ```
 
 **On Windows (Command Prompt):**
 ```cmd
+set FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-id
 set TELEGRAM_BOT_TOKEN=your_bot_token_here
 set TELEGRAM_CHAT_ID=your_chat_id_here
 ```
@@ -118,13 +117,12 @@ Tasks saved successfully.
 And you should receive a Telegram message with the briefing result.
 
 ## GitHub Actions Setup
-
-### 1. Add repository secrets
+Feishu message in your group
+### 1. Add repository secret
 
 Go to your GitHub repository → **Settings** → **Secrets and variables** → **Actions** and add:
 
-- **TELEGRAM_BOT_TOKEN**: Your bot token from @BotFather
-- **TELEGRAM_CHAT_ID**: Your chat ID
+- **FEISHU_WEBHOOK_URL**: Your webhook URL from your Feishu incoming bot
 
 ### 2. Verify the workflow
 
@@ -139,7 +137,7 @@ The workflow file is at `.github/workflows/agent.yml` and will:
 3. Click **"Run workflow"** → **"Run workflow"** again
 4. Wait for it to complete
 5. Check your Telegram for the result message
-6. View logs in GitHub Actions if needed
+6. View logs iFeishu group Actions if needed
 
 ### 4. Update schedule (timezone)
 
@@ -237,6 +235,7 @@ git push
 The agent will pick up the new task on the next execution.
 
 ## Logs and Debugging
+# Logs and Debugging
 
 ### Local logs
 - Run `python -m agent.main` and check console output.
@@ -246,14 +245,14 @@ The agent will pick up the new task on the next execution.
 1. Go to your repo → **Actions** tab
 2. Select the workflow run
 3. Click the job to view detailed logs
-
+4. Check your Feishu group for bot message
 ## Error Handling
 
 The agent implements:
-- ✅ **HTTP timeouts**: 20-second timeout on Telegram requests
+- ✅ **HTTP timeouts**: 20-second timeout on Feishu webhook requests
 - ✅ **HTTP error handling**: Raises exceptions on non-2xx responses
 - ✅ **Task failure handling**: Marks failed tasks with error message
-- ✅ **Telegram failure handling**: Attempts to send failure alert; doesn't crash if Telegram is down
+- ✅ **Webhook failure handling**: Attempts to send failure alert; doesn't crash if Feishu is down
 - ✅ **Atomic file writes**: Uses temp files to prevent `tasks.json` corruption
 
 ## Files Overview
@@ -266,7 +265,7 @@ agent-mvp/
 ├── agent/
 │   ├── __init__.py                    # Package marker
 │   ├── main.py                        # Orchestration logic
-│   ├── task_runner.py                 # Task implementations
+│   ├── feishu.py                      # Feishu webhookions
 │   ├── telegram.py                    # Telegram Bot API integration
 │   └── storage.py                     # File persistence (load/save tasks)
 └── .github/
@@ -280,11 +279,11 @@ agent-mvp/
 - `1`: Fatal error (check logs and Telegram alert)
 
 ## Tips
-
-- **Test Telegram token**: Run with a bogus token to verify your setup catches the error.
+webhook URL**: Run with a bogus URL to verify your setup catches the error.
 - **Add logging**: Extend `main.py` to log to a file for auditing.
 - **Extend tasks**: New tasks go in `task_runner.py` and `tasks.json`.
 - **Manual dispatch**: Use GitHub's "Run workflow" button for ad-hoc runs.
+- **Feishu admin**: Make sure the bot has permissions to post in the group.
 
 ## License
 
@@ -292,4 +291,5 @@ Open source. Use as you wish.
 
 ---
 
+**Ready to go!** Add your Feishu webhook secret
 **Ready to go!** Add your Telegram secrets, commit this repo, and trigger manually or wait for the daily cron run. 🚀

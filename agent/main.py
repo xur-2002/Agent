@@ -6,7 +6,7 @@ from typing import Optional
 
 from agent.storage import load_tasks, save_tasks
 from agent.task_runner import run_task
-from agent.telegram import send_message
+from agent.feishu import send_text
 
 
 def main() -> int:
@@ -46,10 +46,10 @@ def main() -> int:
                 print(f"Task completed: {task_id}")
                 print(f"Result: {result_summary[:100]}...")
                 
-                # Send result to Telegram
+                # Send result to Feishu
                 message = f"✅ Task '{task['title']}' completed\n\n{result_summary}"
-                send_message(message)
-                print("Notification sent to Telegram.")
+                send_text(message)
+                print("Notification sent to Feishu.")
                 
             except Exception as e:
                 # Update task with failure
@@ -60,12 +60,12 @@ def main() -> int:
                 print(f"Task failed: {task_id}")
                 print(f"Error: {e}")
                 
-                # Send failure alert to Telegram
+                # Send failure alert to Feishu
                 error_message = f"❌ Task '{task['title']}' failed\n\nError: {str(e)}"
                 try:
-                    send_message(error_message)
+                    send_text(error_message)
                 except Exception as notify_exc:
-                    print(f"Failed to send Telegram notification: {notify_exc}")
+                    print(f"Failed to send Feishu notification: {notify_exc}")
         
         # Save updated tasks
         print("\nSaving tasks...")
@@ -78,7 +78,7 @@ def main() -> int:
         print(f"Fatal error: {e}", file=sys.stderr)
         # Try to send alert
         try:
-            send_message(f"🔴 Agent encountered a fatal error:\n{str(e)}")
+            send_text(f"🔴 Agent encountered a fatal error:\n{str(e)}")
         except Exception:
             pass
         return 1
