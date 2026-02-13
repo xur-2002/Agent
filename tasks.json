@@ -2,6 +2,9 @@
   {
     "id": "daily_briefing",
     "title": "Generate daily briefing",
-    "status": "pending"
+    "status": "failed",
+    "last_run_at": "2026-02-13T07:26:33.710244+00:00",
+    "result_summary": "Daily Briefing for 2026-02-13\nGenerated at 07:26 UTC\nStatus: Agent is running successfully.\nAll systems operational.",
+    "error": "Invalid URL '': No scheme supplied. Perhaps you meant https://?"
   }
 ]
