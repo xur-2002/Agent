@@ -134,10 +134,10 @@ def main() -> int:
                         # Send article generation results to Feishu if this is article_generate task
                         if task_id == "article_generate" and not Config.DRY_RUN:
                             try:
-                                data = result.data or {}
-                                successful_articles = data.get("successful_articles", [])
-                                failed_articles = data.get("failed_articles", [])
-                                dry_run = data.get("dry_run", False)
+                                metrics = result.metrics or {}
+                                successful_articles = metrics.get("successful_articles", [])
+                                failed_articles = metrics.get("failed_articles", [])
+                                dry_run = metrics.get("dry_run", False)
                                 
                                 logger.info(f"Sending article generation results to Feishu: {len(successful_articles)} successful, {len(failed_articles)} failed")
                                 send_article_generation_results(
