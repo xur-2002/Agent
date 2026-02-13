@@ -621,12 +621,11 @@ def run_article_generate(task: Task) -> TaskResult:
                 "failed": len(failed_articles),
                 "total_keywords": len(keywords),
                 "elapsed_seconds": elapsed,
-                "dry_run": dry_run
-            },
-            data={
+                "dry_run": dry_run,
                 "successful_articles": successful_articles,
                 "failed_articles": failed_articles
-            }
+            },
+            duration_sec=elapsed
         )
         
     except Exception as e:
