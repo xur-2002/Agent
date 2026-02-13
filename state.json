@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T17:40:24.029163+00:00",
-    "next_run_at": "2026-02-13T17:41:24.029175+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T17:40:24.023487+00:00",
+    "last_run_at": "2026-02-13T17:42:10.155791+00:00",
+    "next_run_at": "2026-02-13T17:43:10.155799+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T17:42:10.155639+00:00",
     "last_error": null,
-    "attempts": 32,
-    "last_attempt_at": "2026-02-13T17:40:24.029185+00:00",
-    "run_id": "b2bf59dd"
+    "attempts": 34,
+    "last_attempt_at": "2026-02-13T17:42:10.155807+00:00",
+    "run_id": "237ea4c6"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
