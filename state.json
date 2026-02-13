@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T14:37:50.455250+00:00",
-    "next_run_at": "2026-02-13T14:38:50.455259+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T14:37:50.453974+00:00",
+    "last_run_at": "2026-02-13T15:26:37.523459+00:00",
+    "next_run_at": "2026-02-13T15:27:37.523467+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T15:26:37.519464+00:00",
     "last_error": null,
-    "attempts": 24,
-    "last_attempt_at": "2026-02-13T14:37:50.455270+00:00",
-    "run_id": "1511efaa"
+    "attempts": 26,
+    "last_attempt_at": "2026-02-13T15:26:37.523477+00:00",
+    "run_id": "052e79aa"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
@@ -57,24 +57,24 @@
   "rss_watch": {
     "task_id": "rss_watch",
     "status": "success",
-    "last_run_at": "2026-02-13T13:52:26.775868+00:00",
-    "next_run_at": "2026-02-13T14:52:26.775880+00:00",
-    "last_result_summary": "Found 5 new items:\n\u2022 Monosketch\n\u2022 Resizing windows on macOS Tahoe \u2013 the saga continues\n\u2022 MinIO repository is no longer maintained\n\u2022 MMAcevedo aka Lena by qntm\n\u2022 GPT\u20115.3\u2011Codex\u2011Spark",
+    "last_run_at": "2026-02-13T15:26:37.824955+00:00",
+    "next_run_at": "2026-02-13T16:26:37.824964+00:00",
+    "last_result_summary": "Found 5 new items:\n\u2022 Zed editor switching graphics lib from blade to wgpu\n\u2022 Monosketch\n\u2022 Open Source Is Not About You (2018)\n\u2022 Apple, fix my keyboard before the timer ends or I'm leavi...\n\u2022 Resizing windows on macOS Tahoe \u2013 the saga continues",
     "last_error": null,
-    "attempts": 5,
-    "last_attempt_at": "2026-02-13T13:52:26.775895+00:00",
-    "run_id": "7d10de63"
+    "attempts": 6,
+    "last_attempt_at": "2026-02-13T15:26:37.824976+00:00",
+    "run_id": "052e79aa"
   },
   "health_check_url": {
     "task_id": "health_check_url",
     "status": "success",
-    "last_run_at": "2026-02-13T14:37:50.887849+00:00",
-    "next_run_at": "2026-02-13T14:42:50.887863+00:00",
-    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.43s)",
+    "last_run_at": "2026-02-13T15:26:37.651194+00:00",
+    "next_run_at": "2026-02-13T15:31:37.651203+00:00",
+    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.13s)",
     "last_error": null,
-    "attempts": 9,
-    "last_attempt_at": "2026-02-13T14:37:50.887877+00:00",
-    "run_id": "1511efaa"
+    "attempts": 10,
+    "last_attempt_at": "2026-02-13T15:26:37.651212+00:00",
+    "run_id": "052e79aa"
   },
   "github_trending_watch": {
     "task_id": "github_trending_watch",
