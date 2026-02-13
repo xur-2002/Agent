@@ -1,0 +1,44 @@
+name: Agent MVP Workflow
+
+on:
+  schedule:
+    # Runs every day at 09:00 UTC
+    - cron: '0 9 * * *'
+  
+  workflow_dispatch:
+    # Manual trigger
+    inputs:
+      description:
+        description: 'Manual trigger for agent execution'
+        required: false
+
+jobs:
+  run_agent:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      
+      - name: Run agent
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m agent.main
+      
+      - name: Commit task updates (if any)
+        if: always()
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "Agent Action"
+          git add tasks.json
+          git commit -m "chore: update tasks after agent execution" || true
+          git push
