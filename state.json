@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T11:52:54.831701+00:00",
-    "next_run_at": "2026-02-13T11:53:54.831708+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T11:52:54.831060+00:00",
+    "last_run_at": "2026-02-13T12:49:15.577250+00:00",
+    "next_run_at": "2026-02-13T12:50:15.577257+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T12:49:15.575808+00:00",
     "last_error": null,
-    "attempts": 18,
-    "last_attempt_at": "2026-02-13T11:52:54.831718+00:00",
-    "run_id": "6366d48e"
+    "attempts": 20,
+    "last_attempt_at": "2026-02-13T12:49:15.577267+00:00",
+    "run_id": "e61be579"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
@@ -57,24 +57,24 @@
   "rss_watch": {
     "task_id": "rss_watch",
     "status": "success",
-    "last_run_at": "2026-02-13T11:23:13.236175+00:00",
-    "next_run_at": "2026-02-13T12:23:13.236187+00:00",
-    "last_result_summary": "Found 5 new items:\n\u2022 WolfSSL Sucks Too, So Now What?\n\u2022 MinIO repository is no longer maintained\n\u2022 Resizing windows on macOS Tahoe \u2013 the saga continues\n\u2022 MMAcevedo aka Lena by qntm\n\u2022 GPT\u20115.3\u2011Codex\u2011Spark",
+    "last_run_at": "2026-02-13T12:49:15.954215+00:00",
+    "next_run_at": "2026-02-13T13:49:15.954224+00:00",
+    "last_result_summary": "Found 5 new items:\n\u2022 MinIO repository is no longer maintained\n\u2022 Resizing windows on macOS Tahoe \u2013 the saga continues\n\u2022 US repeals EPA endangerment finding for greenhouse gases\n\u2022 MMAcevedo aka Lena by qntm\n\u2022 GPT\u20115.3\u2011Codex\u2011Spark",
     "last_error": null,
-    "attempts": 3,
-    "last_attempt_at": "2026-02-13T11:23:13.236203+00:00",
-    "run_id": "7f3d42d2"
+    "attempts": 4,
+    "last_attempt_at": "2026-02-13T12:49:15.954239+00:00",
+    "run_id": "e61be579"
   },
   "health_check_url": {
     "task_id": "health_check_url",
     "status": "success",
-    "last_run_at": "2026-02-13T11:52:55.037370+00:00",
-    "next_run_at": "2026-02-13T11:57:55.037381+00:00",
-    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.21s)",
+    "last_run_at": "2026-02-13T12:49:15.655363+00:00",
+    "next_run_at": "2026-02-13T12:54:15.655378+00:00",
+    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.08s)",
     "last_error": null,
-    "attempts": 6,
-    "last_attempt_at": "2026-02-13T11:52:55.037393+00:00",
-    "run_id": "6366d48e"
+    "attempts": 7,
+    "last_attempt_at": "2026-02-13T12:49:15.655392+00:00",
+    "run_id": "e61be579"
   },
   "github_trending_watch": {
     "task_id": "github_trending_watch",
