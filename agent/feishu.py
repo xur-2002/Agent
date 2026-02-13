@@ -135,7 +135,7 @@ def send_rich_card(
     """Send a rich Feishu card with consolidated task execution results.
     
     Args:
-        executed_tasks: List of successful task results (dicts with id, title, summary, duration, metrics).
+        executed_tasks: List of successful/skipped task results (dicts with id, title, summary, duration, metrics).
         failed_tasks: List of failed task results (dicts with id, title, error, duration).
         duration_sec: Total run duration in seconds.
         all_success: Whether all tasks succeeded.
@@ -156,9 +156,13 @@ def send_rich_card(
     if failed_tasks is None:
         failed_tasks = []
     
+    # Count skipped tasks
+    skipped_tasks = [t for t in executed_tasks if t.get("summary", "").startswith("⊘")]
+    successful_only = [t for t in executed_tasks if not t.get("summary", "").startswith("⊘")]
+    
     # Determine status emoji and color
     status_emoji = "✅" if all_success else "⚠️"
-    status_text = "🟢 All Pass" if all_success else "🔴 Failures"
+    status_text = "🟢 All Pass" if all_success else "🔴 Some Issues"
     
     # Build card elements
     elements = []
@@ -169,10 +173,10 @@ def send_rich_card(
         "content": f"## {status_emoji} Agent Run Results"
     })
     
-    # Summary section
+    # Summary section with proper counts
     summary_content = (
         f"**Status:** {status_text}\n"
-        f"**Tasks:** {len(executed_tasks)} ✓ · {len(failed_tasks)} ✗\n"
+        f"**Results:** {len(successful_only)} ✓ · {len(skipped_tasks)} ⊘ · {len(failed_tasks)} ✗\n"
         f"**Duration:** {duration_sec:.2f}s\n"
         f"**Run ID:** `{run_id}`"
     )
@@ -182,14 +186,14 @@ def send_rich_card(
     })
     
     # Successful tasks section (if any)
-    if executed_tasks:
-        success_header = f"**✅ Successful Tasks ({len(executed_tasks)})**"
+    if successful_only:
+        success_header = f"**✅ Successful Tasks ({len(successful_only)})**"
         elements.append({
             "tag": "markdown",
             "content": success_header
         })
         
-        for task in executed_tasks[:5]:  # Limit to 5 for readability
+        for task in successful_only[:5]:  # Limit to 5 for readability
             task_summary = task.get("summary", "No summary") or "No summary"
             if len(task_summary) > 60:
                 task_summary = task_summary[:57] + "..."
@@ -203,13 +207,44 @@ def send_rich_card(
                 "content": task_content
             })
         
-        if len(executed_tasks) > 5:
+        if len(successful_only) > 5:
             elements.append({
                 "tag": "markdown",
-                "content": f"_... and {len(executed_tasks) - 5} more_"
+                "content": f"_... and {len(successful_only) - 5} more_"
             })
     
-    # Failed tasks section (if any)
+    # Skipped tasks section (if any) - show why they were skipped
+    if skipped_tasks:
+        skipped_header = f"**⊘ Skipped Tasks ({len(skipped_tasks)})**"
+        elements.append({
+            "tag": "markdown",
+            "content": skipped_header
+        })
+        
+        for task in skipped_tasks[:3]:
+            task_summary = task.get("summary", "No reason") or "No reason"
+            # Remove ⊘ prefix if present
+            if task_summary.startswith("⊘ "):
+                task_summary = task_summary[2:]
+            if len(task_summary) > 80:
+                task_summary = task_summary[:77] + "..."
+            
+            task_content = (
+                f"**{task.get('title', 'Unknown')}**\n"
+                f"_{task_summary}_"
+            )
+            elements.append({
+                "tag": "markdown",
+                "content": task_content
+            })
+        
+        if len(skipped_tasks) > 3:
+            elements.append({
+                "tag": "markdown",
+                "content": f"_... and {len(skipped_tasks) - 3} more_"
+            })
+    
+    # Failed tasks section (if any) - with more detailed error messages
     if failed_tasks:
         failed_header = f"**❌ Failed Tasks ({len(failed_tasks)})**"
         elements.append({
@@ -219,12 +254,12 @@ def send_rich_card(
         
         for task in failed_tasks[:5]:  # Limit to 5 for readability
             error_msg = task.get("error", "Unknown error") or "Unknown error"
-            if len(error_msg) > 50:
-                error_msg = error_msg[:47] + "..."
+            if len(error_msg) > 80:
+                error_msg = error_msg[:77] + "..."
             
             task_content = (
                 f"**{task.get('title', 'Unknown')}**\n"
-                f"_Error: {error_msg}_"
+                f"_❌ {error_msg}_"
             )
             elements.append({
                 "tag": "markdown",

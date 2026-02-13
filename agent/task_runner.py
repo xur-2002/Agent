@@ -469,11 +469,12 @@ def run_article_generate(task: Task) -> TaskResult:
     """Generate articles from keywords using search + LLM.
     
     Minimal cost closed-loop implementation:
-    - Uses Serper API to search (top 5 results)
+    - Uses Serper API to search (top 5 results) if available
     - Uses GPT-4o-mini for article generation (cheapest model)
     - No image generation, no email
     - Saves articles to outputs/articles/YYYY-MM-DD/
     - Supports DRY_RUN mode for testing
+    - Gracefully skips if SERPER_API_KEY or OPENAI_API_KEY missing
     
     Params:
         keywords: List of keywords to generate articles for
@@ -483,7 +484,6 @@ def run_article_generate(task: Task) -> TaskResult:
         TaskResult with successful/failed articles list.
     """
     from agent.article_generator import generate_article, save_article
-    from agent.content_pipeline.search import get_search_provider
     
     params = task.params
     keywords = params.get("keywords", [])
@@ -498,14 +498,32 @@ def run_article_generate(task: Task) -> TaskResult:
             error="keywords param is empty"
         )
     
-    # Check DRY_RUN mode
+    # Check required secrets
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+    serper_key = os.getenv("SERPER_API_KEY", "").strip()
     dry_run = os.getenv("DRY_RUN", "0") == "1"
     
+    # Graceful degradation: skip if OpenAI key missing
+    if not openai_key and not dry_run:
+        logger.warning("[article_generate] OPENAI_API_KEY not set - task skipped (set DRY_RUN=1 to test locally)")
+        return TaskResult(
+            status="skipped",
+            summary="Article generation skipped - OPENAI_API_KEY not configured",
+            error="OPENAI_API_KEY missing"
+        )
+    
     try:
-        logger.info(f"[article_generate] Starting with {len(keywords)} keyword(s), DRY_RUN={dry_run}")
+        logger.info(f"[article_generate] Starting with {len(keywords)} keyword(s), DRY_RUN={dry_run}, SERPER={'available' if serper_key else 'not set'}")
         
-        # Get search provider
-        search_provider = get_search_provider(os.getenv("SEARCH_PROVIDER", "serper"))
+        # Try to get search provider, but allow None
+        search_provider = None
+        if serper_key:
+            try:
+                from agent.content_pipeline.search import get_search_provider
+                search_provider = get_search_provider(os.getenv("SEARCH_PROVIDER", "serper"))
+            except Exception as e:
+                logger.warning(f"[article_generate] Failed to initialize search provider: {e}")
+                search_provider = None
         
         successful_articles = []
         failed_articles = []
@@ -516,20 +534,19 @@ def run_article_generate(task: Task) -> TaskResult:
             try:
                 logger.info(f"[article_generate] Processing keyword: {keyword}")
                 
-                # Search for this keyword
-                search_results = search_provider.search(keyword, limit=5)
+                # Search for this keyword (optional if no Serper key)
+                search_results = None
+                if search_provider:
+                    try:
+                        search_results = search_provider.search(keyword, limit=5)
+                    except Exception as e:
+                        logger.warning(f"[article_generate] Search failed for '{keyword}': {e} - continuing with empty search context")
+                        search_results = []
+                else:
+                    logger.info(f"[article_generate] No search provider available - generating article with context-only mode for '{keyword}'")
+                    search_results = []
                 
-                if not search_results:
-                    logger.warning(f"[article_generate] No search results for: {keyword}")
-                    failed_articles.append({
-                        "keyword": keyword,
-                        "error": "No search results found"
-                    })
-                    continue
-                
-                logger.debug(f"[article_generate] Found {len(search_results)} search results for {keyword}")
-                
-                # Generate article
+                # Generate article (with or without search context)
                 article = generate_article(
                     keyword=keyword,
                     search_results=[
@@ -538,7 +555,7 @@ def run_article_generate(task: Task) -> TaskResult:
                             "snippet": r.snippet,
                             "link": r.url
                         }
-                        for r in search_results
+                        for r in (search_results or [])
                     ],
                     dry_run=dry_run,
                     language=params.get("language", "zh-CN")

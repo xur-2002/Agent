@@ -29,21 +29,25 @@ def slugify(text: str, max_length: int = 60) -> str:
 
 def generate_article(
     keyword: str,
-    search_results: List[Dict[str, Any]],
+    search_results: List[Dict[str, Any]] = None,
     dry_run: bool = False,
     language: str = "zh-CN"
 ) -> Optional[Dict[str, Any]]:
-    """Generate a simple article from search results.
+    """Generate a simple article from search results or keyword alone.
     
     Args:
         keyword: The keyword/topic
         search_results: List of search results (max 5) from Serper with title, snippet, link
+                       If None or empty, article is generated from keyword knowledge only
         dry_run: If True, return mock article without calling OpenAI
         language: Language code (zh-CN or en-US)
         
     Returns:
         Dict with title, body, metadata, or None if failed
     """
+    if search_results is None:
+        search_results = []
+    
     if dry_run:
         logger.info(f"[DRY_RUN] Generating mock article for keyword: {keyword}")
         return _generate_mock_article(keyword, search_results)
@@ -65,16 +69,19 @@ def generate_article(
     # Prepare sources for context
     sources = []
     source_text = ""
-    for i, result in enumerate(search_results[:5], 1):
-        title = result.get("title", "")
-        snippet = result.get("snippet", "")
-        link = result.get("link", "")
-        sources.append({"title": title, "link": link})
-        source_text += f"{i}. [{title}]({link})\n   {snippet}\n\n"
     
-    # Build prompt
+    if search_results:
+        for i, result in enumerate(search_results[:5], 1):
+            title = result.get("title", "")
+            snippet = result.get("snippet", "")
+            link = result.get("link", "")
+            sources.append({"title": title, "link": link})
+            source_text += f"{i}. [{title}]({link})\n   {snippet}\n\n"
+    
+    # Build prompt (with graceful handling of missing search context)
     if language == "zh-CN":
-        prompt = f"""基于以下搜索结果，为关键词"{keyword}"写一篇 600-800 字的中文文章。
+        if source_text:
+            prompt = f"""基于以下搜索结果，为关键词"{keyword}"写一篇 600-800 字的中文文章。
 
 搜索结果：
 {source_text}
@@ -85,7 +92,28 @@ def generate_article(
 3. 如果无法确定的信息，用"据称"、"据报道"或"暂无公开数据"等措辞
 4. 文章末尾必须列出 3-5 个参考链接（从搜索结果中选取）
 5. 使用 Markdown 格式
-6. 专业、客观的语气
+6. 专业、客观的语态
+
+输出格式（就是这个格式，不要加任何其他内容）：
+# [文章标题]
+
+## 导语
+
+[导语内容，100字左右]
+
+## 正文
+
+[正文内容，400-600字]"""
+        else:
+            # No search results - use broader general knowledge prompt
+            prompt = f"""为关键词"{keyword}"写一篇 600-800 字的中文文章。
+
+要求：
+1. 文章结构：标题、导语（100字左右）、正文、小结
+2. 基于一般知识和常见认知进行创作（清楚标注假如有的话的信息来源）
+3. 使用 Markdown 格式
+4. 专业、客观的语态
+5. 文章末尾如果有参考信息来源，请列出
 
 输出格式（就是这个格式，不要加任何其他内容）：
 # [文章标题]

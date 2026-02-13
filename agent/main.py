@@ -149,6 +149,16 @@ def main() -> int:
                                 )
                             except Exception as e:
                                 logger.warning(f"Failed to send article generation results to Feishu: {e}")
+                    elif result.status == "skipped":
+                        # Task was skipped (e.g., missing API key)
+                        logger.info(f"⊘ [{task_id}] SKIPPED: {result.error}")
+                        executed_tasks.append({
+                            "id": task_id,
+                            "title": task.title,
+                            "summary": f"⊘ Skipped: {result.error}",
+                            "duration": result.duration_sec,
+                            "metrics": {}
+                        })
                     else:
                         all_success = False
                         failed_tasks.append({
