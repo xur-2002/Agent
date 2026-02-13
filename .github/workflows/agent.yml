@@ -2,20 +2,27 @@ name: Agent MVP Workflow
 
 on:
   schedule:
-    # Runs every day at 09:00 UTC
-    - cron: '0 9 * * *'
+    # Runs every 5 minutes
+    - cron: '*/5 * * * *'
   
   workflow_dispatch:
-    # Manual trigger
+    # Manual trigger from Actions tab
     inputs:
-      description:
-        description: 'Manual trigger for agent execution'
+      persist_state:
+        description: 'Persist state to repo (yes/no, default: no)'
         required: false
+        default: 'no'
+  
+  repository_dispatch:
+    # External HTTP trigger via GitHub API
+    types: [agent-trigger]
 
 jobs:
   run_agent:
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -31,13 +38,27 @@ jobs:
       - name: Run agent
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          PERSIST_STATE: ${{ github.event.inputs.persist_state || 'none' }}
         run: python -m agent.main
       
-      - name: Commit task updates (if any)
-        if: always()
+      - name: Commit and push changes (if PERSIST_STATE=repo)
+        if: |
+          always() && 
+          (github.event.inputs.persist_state == 'yes' || 
+           env.PERSIST_STATE == 'repo')
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "Agent Action"
+          git config --local user.email "agent@github.com"
+          git config --local user.name "Agent Workflow"
           git add tasks.json
           git commit -m "chore: update tasks after agent execution" || true
           git push
+        env:
+          PERSIST_STATE: ${{ github.event.inputs.persist_state || 'none' }}
+      
+      - name: Upload run logs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: agent-run-logs
+          path: run-log.txt
+          retention-days: 7
