@@ -80,10 +80,10 @@
     "id": "article_generate",
     "title": "Article Generation - Cheap Mode",
     "enabled": true,
-    "frequency": "every_5_min",
+    "frequency": "every_minute",
     "timezone": "UTC",
     "params": {
-      "keywords": ["artificial intelligence", "cloud computing", "web development", "python编程", "深度学习"],
+      "keywords": ["artificial intelligence", "cloud computing"],
       "daily_article_count": 1,
       "language": "zh-CN",
       "include_images": false,

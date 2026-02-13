@@ -53,16 +53,22 @@ jobs:
           PERSIST_STATE: ${{ github.event.inputs.persist_state || 'none' }}
         run: python -m agent.main | tee run-log.txt
       
-      - name: Commit and push changes (if PERSIST_STATE=repo)
+      - name: Commit and push changes (state + articles)
         if: always()
         run: |
           git config --local user.email "agent@github.com"
           git config --local user.name "Agent Workflow"
+          # Try to add and commit state.json if it exists
           if [[ -f state.json ]]; then
             git add state.json
-            git commit -m "chore: update agent state" || true
-            git push || true
           fi
+          # Also commit any newly generated articles
+          if [[ -d outputs/articles ]]; then
+            git add outputs/articles/ || true
+          fi
+          # Commit if there are changes
+          git commit -m "chore: update agent state and articles" || true
+          git push -u origin main || true
       
       - name: Upload run logs
         if: always()
@@ -71,3 +77,14 @@ jobs:
           name: agent-run-logs
           path: run-log.txt
           retention-days: 7
+      
+      - name: Show outputs location
+        if: always()
+        run: |
+          echo "📂 Generated articles location:"
+          echo "  Repo: outputs/articles/YYYY-MM-DD/"
+          echo "  Browse: https://github.com/${{ github.repository }}/tree/main/outputs/articles/"
+          if [[ -d outputs/articles ]]; then
+            echo "✅ Found articles directory. Files:"
+            find outputs/articles -type f | head -20
+          fi
