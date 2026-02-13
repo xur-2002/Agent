@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T17:42:10.155791+00:00",
-    "next_run_at": "2026-02-13T17:43:10.155799+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T17:42:10.155639+00:00",
+    "last_run_at": "2026-02-13T17:54:35.187103+00:00",
+    "next_run_at": "2026-02-13T17:55:35.187109+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T17:54:35.185392+00:00",
     "last_error": null,
-    "attempts": 34,
-    "last_attempt_at": "2026-02-13T17:42:10.155807+00:00",
-    "run_id": "237ea4c6"
+    "attempts": 36,
+    "last_attempt_at": "2026-02-13T17:54:35.187116+00:00",
+    "run_id": "bb4f6661"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
@@ -68,13 +68,13 @@
   "health_check_url": {
     "task_id": "health_check_url",
     "status": "success",
-    "last_run_at": "2026-02-13T17:40:24.227658+00:00",
-    "next_run_at": "2026-02-13T17:45:24.227668+00:00",
-    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.20s)",
+    "last_run_at": "2026-02-13T17:54:35.319182+00:00",
+    "next_run_at": "2026-02-13T17:59:35.319190+00:00",
+    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.13s)",
     "last_error": null,
-    "attempts": 13,
-    "last_attempt_at": "2026-02-13T17:40:24.227678+00:00",
-    "run_id": "b2bf59dd"
+    "attempts": 14,
+    "last_attempt_at": "2026-02-13T17:54:35.319200+00:00",
+    "run_id": "bb4f6661"
   },
   "github_trending_watch": {
     "task_id": "github_trending_watch",
@@ -112,12 +112,12 @@
   "article_generate": {
     "task_id": "article_generate",
     "status": "failed",
-    "last_run_at": "2026-02-13T17:40:28.035201+00:00",
-    "next_run_at": "2026-02-13T17:45:28.035216+00:00",
+    "last_run_at": "2026-02-13T17:54:39.195157+00:00",
+    "next_run_at": "2026-02-13T17:59:39.195171+00:00",
     "last_result_summary": "Article generation task failed",
     "last_error": "SERPER_API_KEY not set",
-    "attempts": 1,
-    "last_attempt_at": "2026-02-13T17:40:28.035231+00:00",
-    "run_id": "b2bf59dd"
+    "attempts": 2,
+    "last_attempt_at": "2026-02-13T17:54:39.195188+00:00",
+    "run_id": "bb4f6661"
   }
 }
