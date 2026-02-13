@@ -33,11 +33,17 @@ class Config:
     FEISHU_APP_ID: str = os.getenv("FEISHU_APP_ID", "")
     FEISHU_APP_SECRET: str = os.getenv("FEISHU_APP_SECRET", "")
     
+    # LLM Provider (article generation)
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "groq").lower()  # groq, openai, dry_run
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    
     # Content pipeline (Direction 1)
     SEARCH_PROVIDER: str = os.getenv("SEARCH_PROVIDER", "serper")
     SERPER_API_KEY: str = os.getenv("SERPER_API_KEY", "")
     BING_SEARCH_KEY: str = os.getenv("BING_SEARCH_KEY", "")
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     
     # Email delivery
     SMTP_HOST: str = os.getenv("SMTP_HOST", "")

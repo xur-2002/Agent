@@ -141,11 +141,12 @@ def main() -> int:
                                 
                                 logger.info(f"Sending article generation results to Feishu: {len(successful_articles)} successful, {len(failed_articles)} failed")
                                 send_article_generation_results(
-                                    successful_articles=successful_articles,
-                                    failed_articles=failed_articles,
-                                    total_time=result.duration_sec,
-                                    run_id=run_id,
-                                    dry_run=dry_run
+                                    successful_articles=successful_articles or [],
+                                    failed_articles=failed_articles or [],
+                                    skipped_articles=[],
+                                    total_time=result.duration_sec or 0,
+                                    provider="unknown",
+                                    run_id=run_id
                                 )
                             except Exception as e:
                                 logger.warning(f"Failed to send article generation results to Feishu: {e}")
@@ -159,6 +160,25 @@ def main() -> int:
                             "duration": result.duration_sec,
                             "metrics": {}
                         })
+                        
+                        # Send Feishu card for skipped article generation tasks
+                        if task_id == "article_generate":
+                            try:
+                                metrics = result.metrics or {}
+                                skipped_articles = metrics.get("skipped_articles", []) or []
+                                provider = metrics.get("provider", "unknown")
+                                
+                                logger.info(f"Sending skipped article generation notification to Feishu")
+                                send_article_generation_results(
+                                    successful_articles=[],
+                                    failed_articles=[],
+                                    skipped_articles=skipped_articles,
+                                    total_time=result.duration_sec or 0,
+                                    provider=provider,
+                                    run_id=run_id
+                                )
+                            except Exception as e:
+                                logger.warning(f"Failed to send skipped notification to Feishu: {e}")
                     else:
                         all_success = False
                         failed_tasks.append({

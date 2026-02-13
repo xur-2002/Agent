@@ -1,14 +1,116 @@
-"""Minimalist article generation module for lowest cost closed loop."""
+"""Minimalist article generation module for lowest cost closed loop.
+
+Supports multiple LLM providers:
+- groq: Free tier via OpenAI-compatible API, llama-3.1-8b-instant
+- openai: OpenAI GPT-4o-mini (paid)
+- dry_run: Mock article generation (free)
+"""
 
 import os
 import json
 import logging
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from pathlib import Path
 import re
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Exception Types
+# ============================================================================
+
+class LLMProviderError(Exception):
+    """Base exception for LLM provider issues."""
+    def __init__(self, message: str, provider: str, retriable: bool = True):
+        self.message = message
+        self.provider = provider
+        self.retriable = retriable
+        super().__init__(f"[{provider}] {message}")
+
+
+class MissingAPIKeyError(LLMProviderError):
+    """API key not configured."""
+    def __init__(self, provider: str):
+        super().__init__(f"API key not configured", provider, retriable=False)
+
+
+class InsufficientQuotaError(LLMProviderError):
+    """API quota exhausted or billing issue."""
+    def __init__(self, provider: str):
+        super().__init__(f"Insufficient quota / billing issue", provider, retriable=False)
+
+
+class RateLimitError(LLMProviderError):
+    """Rate limit hit."""
+    def __init__(self, provider: str):
+        super().__init__(f"Rate limited", provider, retriable=True)
+
+
+class TransientError(LLMProviderError):
+    """Transient network/timeout error."""
+    def __init__(self, provider: str, original_error: str):
+        super().__init__(f"Network error: {original_error}", provider, retriable=True)
+
+
+# ============================================================================
+# LLM Provider Factory
+# ============================================================================
+
+def _get_llm_client(provider: str) -> Tuple[Any, str, bool]:
+    """Get LLM client for a specific provider.
+    
+    Args:
+        provider: groq, openai, or dry_run
+        
+    Returns:
+        Tuple of (client, model, is_dry_run)
+        
+    Raises:
+        MissingAPIKeyError: If API key not configured
+    """
+    from agent.config import Config
+    
+    if provider == "groq":
+        api_key = Config.GROQ_API_KEY.strip()
+        if not api_key:
+            raise MissingAPIKeyError("groq")
+        
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise LLMProviderError("openai package not installed", "groq", False)
+        
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.groq.com/openai/v1"
+        )
+        model = Config.GROQ_MODEL
+        logger.info(f"Initialized Groq client (model: {model})")
+        return client, model, False
+    
+    elif provider == "openai":
+        api_key = Config.OPENAI_API_KEY.strip()
+        if not api_key:
+            raise MissingAPIKeyError("openai")
+        
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise LLMProviderError("openai package not installed", "openai", False)
+        
+        client = OpenAI(api_key=api_key)
+        model = Config.OPENAI_MODEL
+        logger.info(f"Initialized OpenAI client (model: {model})")
+        return client, model, False
+    
+    elif provider == "dry_run":
+        logger.info("Using DRY_RUN mock mode")
+        return None, "mock", True
+    
+    else:
+        raise ValueError(f"Unknown LLM provider: {provider}")
 
 
 def slugify(text: str, max_length: int = 60) -> str:
@@ -31,40 +133,49 @@ def generate_article(
     keyword: str,
     search_results: List[Dict[str, Any]] = None,
     dry_run: bool = False,
-    language: str = "zh-CN"
+    language: str = "zh-CN",
+    provider: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
-    """Generate a simple article from search results or keyword alone.
+    """Generate article with configurable LLM provider.
     
     Args:
         keyword: The keyword/topic
-        search_results: List of search results (max 5) from Serper with title, snippet, link
-                       If None or empty, article is generated from keyword knowledge only
-        dry_run: If True, return mock article without calling OpenAI
-        language: Language code (zh-CN or en-US)
+        search_results: List of search results with title, snippet, link
+        dry_run: If True, use mock generation mode
+        language: zh-CN or en-US
+        provider: groq, openai, dry_run (if None, use Config.LLM_PROVIDER)
         
     Returns:
-        Dict with title, body, metadata, or None if failed
+        Dict with article data including provider/model info, or None if failed
+        
+    Raises:
+        LLMProviderError: On API errors (with retriable flag)
     """
+    from agent.config import Config
+    
     if search_results is None:
         search_results = []
     
+    if provider is None:
+        provider = Config.LLM_PROVIDER
+    
+    # Override with dry_run parameter
     if dry_run:
-        logger.info(f"[DRY_RUN] Generating mock article for keyword: {keyword}")
-        return _generate_mock_article(keyword, search_results)
+        provider = "dry_run"
     
-    # Import OpenAI at runtime to avoid issues if key is not set
+    # Get client for provider
     try:
-        from openai import OpenAI
-    except ImportError:
-        logger.error("OpenAI client not available")
-        return None
+        client, model, is_dry_run = _get_llm_client(provider)
+    except LLMProviderError:
+        raise
     
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        logger.error("OPENAI_API_KEY not set")
-        return None
-    
-    client = OpenAI(api_key=api_key)
+    # Generate mock article for dry_run
+    if is_dry_run:
+        logger.info(f"[DRY_RUN] Generating mock article for keyword: {keyword}")
+        article = _generate_mock_article(keyword, search_results)
+        article["provider"] = "dry_run"
+        article["model"] = "mock"
+        return article
     
     # Prepare sources for context
     sources = []
@@ -78,7 +189,7 @@ def generate_article(
             sources.append({"title": title, "link": link})
             source_text += f"{i}. [{title}]({link})\n   {snippet}\n\n"
     
-    # Build prompt (with graceful handling of missing search context)
+    # Build prompt
     if language == "zh-CN":
         if source_text:
             prompt = f"""基于以下搜索结果，为关键词"{keyword}"写一篇 600-800 字的中文文章。
@@ -105,15 +216,13 @@ def generate_article(
 
 [正文内容，400-600字]"""
         else:
-            # No search results - use broader general knowledge prompt
             prompt = f"""为关键词"{keyword}"写一篇 600-800 字的中文文章。
 
 要求：
 1. 文章结构：标题、导语（100字左右）、正文、小结
-2. 基于一般知识和常见认知进行创作（清楚标注假如有的话的信息来源）
+2. 基于一般知识和常见认知进行创作
 3. 使用 Markdown 格式
 4. 专业、客观的语态
-5. 文章末尾如果有参考信息来源，请列出
 
 输出格式（就是这个格式，不要加任何其他内容）：
 # [文章标题]
@@ -128,30 +237,23 @@ def generate_article(
 
 ## 小结
 
-[小结，100字左右]
-
-## 参考链接
-
-- [链接1标题](链接URL)
-- [链接2标题](链接URL)
-...
-"""
+[小结，100字左右]"""
     else:
-        # English version
-        prompt = f"""Based on the following search results, write a 500-800 word English article about "{keyword}".
+        if source_text:
+            prompt = f"""Based on the following search results, write a 500-800 word English article about "{keyword}".
 
 Search results:
 {source_text}
 
 Requirements:
 1. Structure: Title, Introduction (80 words), Body, Conclusion
-2. Base completely on search results, no fabrication
-3. For uncertain information, use phrases like "reportedly", "according to", or "no public data available"
-4. End with 3-5 reference links (from search results)
+2. Based on search results only, no fabrication
+3. For uncertain information, use "reportedly", "according to", etc.
+4. Add 3-5 reference links
 5. Use Markdown format
 6. Professional and objective tone
 
-Output format (this format exactly, nothing else):
+Output format (exactly this format, nothing else):
 # [Article Title]
 
 ## Introduction
@@ -168,17 +270,40 @@ Output format (this format exactly, nothing else):
 
 ## References
 
-- [Link 1 Title](Link URL)
-- [Link 2 Title](Link URL)
-...
+- [Link Title](URL)
+- [Link Title](URL)
 """
+        else:
+            prompt = f"""Write a 500-800 word English article about "{keyword}".
+
+Requirements:
+1. Structure: Title, Introduction (80 words), Body, Conclusion
+2. Based on general knowledge
+3. Use Markdown format
+4. Professional and objective tone
+
+Output format (exactly this format, nothing else):
+# [Article Title]
+
+## Introduction
+
+[Introduction content, ~80 words]
+
+## Body
+
+[Main content, 300-500 words]
+
+## Conclusion
+
+[Conclusion, ~80 words]"""
     
+    # Call the LLM
     try:
-        logger.info(f"Calling OpenAI API for keyword: {keyword}")
+        logger.info(f"Calling {provider} API for keyword: {keyword}")
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model,
             messages=[
-                {"role": "system", "content": "You are a professional editor writing factual, well-researched articles. Always cite your sources."},
+                {"role": "system", "content": "You are a professional editor writing factual, well-researched articles."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
@@ -187,36 +312,52 @@ Output format (this format exactly, nothing else):
         )
         
         content = response.choices[0].message.content.strip()
-        logger.info(f"Article generated for keyword: {keyword}")
+        logger.info(f"Article generated by {provider} for keyword: {keyword}")
         
         # Parse the response
         article = _parse_article_response(content)
         if article:
             article["keyword"] = keyword
             article["sources"] = sources
+            article["provider"] = provider
+            article["model"] = model
             article["word_count"] = len(content.split())
+            article["sources_count"] = len(sources)
             return article
         else:
             logger.error("Failed to parse article response")
             return None
             
     except Exception as e:
-        logger.error(f"OpenAI API call failed: {e}")
-        return None
+        # Classify the exception
+        error_str = str(e).lower()
+        
+        if "insufficient_quota" in error_str or "billing" in error_str or "quota" in error_str:
+            raise InsufficientQuotaError(provider)
+        elif "invalid_api_key" in error_str or "401" in error_str or "unauthorized" in error_str:
+            raise MissingAPIKeyError(provider)
+        elif "rate_limit" in error_str or "429" in error_str:
+            raise RateLimitError(provider)
+        elif "timeout" in error_str or "connection" in error_str or "network" in error_str:
+            raise TransientError(provider, str(e))
+        else:
+            # Generic error
+            logger.error(f"{provider} API call failed: {e}")
+            raise LLMProviderError(f"API call failed: {str(e)[:100]}", provider, retriable=True)
 
 
 def _generate_mock_article(
     keyword: str,
     search_results: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
-    """Generate a mock article for DRY_RUN mode.
+    """Generate a mock article for DRY_RUN/testing mode.
     
     Args:
         keyword: The keyword/topic
         search_results: Search results (unused in mock)
         
     Returns:
-        Dict with mock article data
+        Dict with full article data
     """
     sources = []
     for i, result in enumerate(search_results[:5], 1):
@@ -225,32 +366,29 @@ def _generate_mock_article(
             "link": result.get("link", f"https://example.com/{i}")
         })
     
-    title = f"Understanding {keyword} in 2024"
+    title = f"Understanding {keyword}"
     
     markdown = f"""# {title}
 
 ## Introduction
 
-This is a mock article about {keyword} generated in DRY_RUN mode. 
-In production, this would be a real article sourced from search results and generated by GPT-4o-mini.
-The article would be 600-800 words with proper citations and structure.
+This article explores {keyword} and its importance in today's world.
+Understanding {keyword} is crucial for professionals and organizations.
 
 ## Body
 
-{keyword} continues to be an important topic in the technology landscape.
-Based on recent data and reports, we can see several key trends emerging:
+{keyword} is a significant topic that requires careful consideration. Here are the key aspects:
 
-1. First trend related to {keyword}
-2. Second trend related to {keyword}
-3. Third trend related to {keyword}
+1. **First Aspect**: {keyword} has grown significantly in importance
+2. **Second Aspect**: Organizations are increasingly focusing on {keyword}
+3. **Third Aspect**: The future of {keyword} depends on several factors
 
-These trends demonstrate the growing importance of {keyword} in modern systems and practices.
+These factors demonstrate the relevance and importance of {keyword} in the current landscape.
 
 ## Conclusion
 
-{keyword} remains a critical area for ongoing research and development.
-As the landscape evolves, organizations should stay informed about these developments
-to make strategic decisions.
+{keyword} continues to be an important area for development and innovation.
+As the landscape evolves, stakeholders should stay informed about the latest developments.
 
 ## References
 
@@ -264,8 +402,10 @@ to make strategic decisions.
         "body": markdown,
         "keyword": keyword,
         "sources": sources,
+        "provider": "dry_run",
+        "model": "mock",
         "word_count": sum(len(line.split()) for line in markdown.split('\n')),
-        "dry_run": True
+        "sources_count": len(sources)
     }
 
 
@@ -299,14 +439,14 @@ def save_article(
     article: Dict[str, Any],
     output_dir: str = "outputs/articles"
 ) -> Optional[str]:
-    """Save article to disk in outputs/articles/YYYY-MM-DD/<slug>.md and .json
+    """Save article to disk in outputs/articles/YYYY-MM-DD/<slug>.*
     
     Args:
-        article: Article dict with title, body, keyword, sources, word_count
+        article: Article dict with provider, model, keyword, sources, etc.
         output_dir: Base output directory
         
     Returns:
-        Path to saved article, or None if failed
+        Path to saved markdown file, or None if failed
     """
     try:
         # Create date-based directory
@@ -323,14 +463,16 @@ def save_article(
             f.write(article["body"])
         logger.info(f"Saved article markdown: {md_path}")
         
-        # Save JSON metadata
+        # Save JSON metadata with provider info
         metadata = {
             "title": article.get("title", ""),
             "keyword": article.get("keyword", ""),
-            "keywords": [article.get("keyword", "")],
+            "provider": article.get("provider", "unknown"),
+            "model": article.get("model", "unknown"),
             "sources": article.get("sources", []),
             "created_at": datetime.now().isoformat(),
             "word_count": article.get("word_count", 0),
+            "sources_count": article.get("sources_count", 0),
             "file_path": str(md_path)
         }
         json_path = article_dir / f"{slug}.json"

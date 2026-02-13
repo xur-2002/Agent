@@ -358,40 +358,54 @@ def send_alert_card(failed_tasks: List[Dict[str, Any]], run_id: str) -> None:
 def send_article_generation_results(
     successful_articles: List[Dict[str, Any]] = None,
     failed_articles: List[Dict[str, Any]] = None,
+    skipped_articles: List[Dict[str, Any]] = None,
     total_time: float = 0,
-    run_id: str = "",
-    dry_run: bool = False
+    provider: str = "unknown",
+    run_id: str = ""
 ) -> None:
     """Send article generation results card to Feishu.
     
     Args:
         successful_articles: List of successfully generated articles
         failed_articles: List of failed article generations
+        skipped_articles: List of skipped keywords
         total_time: Total execution time in seconds
+        provider: LLM provider used (groq, openai, dry_run, etc.)
         run_id: GitHub Actions run ID (optional)
-        dry_run: Whether this was a dry run
     
-    Raises:
-        ValueError: If FEISHU_WEBHOOK_URL is not set.
-        requests.RequestException: If the HTTP request fails.
+    Note: Safely handles None values without crashing
     """
-    if successful_articles is None:
-        successful_articles = []
-    if failed_articles is None:
-        failed_articles = []
+    # Safe defaults
+    successful_articles = successful_articles or []
+    failed_articles = failed_articles or []
+    skipped_articles = skipped_articles or []
+    total_time = total_time or 0
+    provider = provider or "unknown"
+    run_id = run_id or ""
     
     webhook_url = os.getenv("FEISHU_WEBHOOK_URL")
     if not webhook_url:
-        raise ValueError("FEISHU_WEBHOOK_URL environment variable not set")
+        logger.info("FEISHU_WEBHOOK_URL not set - skipping Feishu notification")
+        return
     
     # Build elements
     elements = []
     
-    # Title
-    status_emoji = "✅" if not failed_articles else "⚠️" if successful_articles else "❌"
+    # Title with status
+    if successful_articles and not failed_articles and not skipped_articles:
+        status_emoji = "✅"
+        title_status = "Success"
+    elif skipped_articles and not successful_articles and not failed_articles:
+        status_emoji = "⊘"
+        title_status = "Skipped"
+    elif successful_articles:
+        status_emoji = "⚠️"
+        title_status = "Partial Success"
+    else:
+        status_emoji = "❌"
+        title_status = "Failed"
+    
     title = f"{status_emoji} Article Generation Results"
-    if dry_run:
-        title += " (DRY_RUN)"
     
     elements.append({
         "tag": "markdown",
@@ -400,9 +414,11 @@ def send_article_generation_results(
     
     # Summary
     summary_text = f"📊 **Summary**\n"
-    summary_text += f"• ✅ Successful: {len(successful_articles)}\n"
-    summary_text += f"• ❌ Failed: {len(failed_articles)}\n"
-    summary_text += f"• ⏱️ Time: {total_time:.1f}s\n"
+    summary_text += f"• ✅ Successful: {len(successful_articles) or 0}\n"
+    summary_text += f"• ❌ Failed: {len(failed_articles) or 0}\n"
+    summary_text += f"• ⊘ Skipped: {len(skipped_articles) or 0}\n"
+    summary_text += f"• ⏱️ Time: {float(total_time):.1f}s\n"
+    summary_text += f"• 🤖 Provider: {provider}\n"
     if run_id:
         summary_text += f"• 🔗 Run ID: `{run_id}`"
     
@@ -413,69 +429,116 @@ def send_article_generation_results(
     
     # Successful articles
     if successful_articles:
+        success_count = len(successful_articles) or 0
         elements.append({
             "tag": "markdown",
-            "content": f"### ✅ Successful Articles ({len(successful_articles)})"
+            "content": f"### ✅ Successful Articles ({success_count})"
         })
         
-        for article in successful_articles[:5]:  # Show max 5
-            article_text = f"**{article.get('title', 'Untitled')}**\n"
-            article_text += f"📌 Keyword: `{article.get('keyword', 'N/A')}`\n"
-            article_text += f"📝 Words: {article.get('word_count', 0)}\n"
-            article_text += f"📚 Sources: {article.get('sources_count', 0)}\n"
-            article_text += f"📄 File: `{article.get('file_path', 'N/A')}`"
+        for i, article in enumerate(successful_articles[:3]):  # Show max 3
+            if not article:  # Skip None items
+                continue
+                
+            title_text = article.get('title') or 'Untitled'
+            keyword = article.get('keyword') or 'N/A'
+            word_count = article.get('word_count') or 0
+            sources_count = article.get('sources_count') or 0
+            file_path = article.get('file_path') or 'N/A'
+            
+            article_text = f"**{title_text}**\n"
+            article_text += f"📌 Keyword: `{keyword}`\n"
+            article_text += f"📝 Words: {word_count}\n"
+            article_text += f"📚 Sources: {sources_count}\n"
+            article_text += f"📄 File: `{file_path}`"
             
             elements.append({
                 "tag": "markdown",
                 "content": article_text
             })
         
-        if len(successful_articles) > 5:
+        if len(successful_articles) > 3:
             elements.append({
                 "tag": "markdown",
-                "content": f"_... and {len(successful_articles) - 5} more articles_"
+                "content": f"_... and {len(successful_articles) - 3} more articles_"
+            })
+    
+    # Skipped articles
+    if skipped_articles:
+        skipped_count = len(skipped_articles) or 0
+        elements.append({
+            "tag": "markdown",
+            "content": f"### ⊘ Skipped Articles ({skipped_count})"
+        })
+        
+        for i, skipped in enumerate(skipped_articles[:2]):  # Show max 2
+            if not skipped:  # Skip None items
+                continue
+                
+            keyword = skipped.get('keyword') or 'Unknown'
+            reason = skipped.get('reason') or 'No reason provided'
+            # Truncate reason to 200 chars
+            if len(reason) > 200:
+                reason = reason[:200] + "..."
+            
+            skipped_text = f"**{keyword}**\n"
+            skipped_text += f"⊘ Reason: {reason}"
+            
+            elements.append({
+                "tag": "markdown",
+                "content": skipped_text
+            })
+        
+        if len(skipped_articles) > 2:
+            elements.append({
+                "tag": "markdown",
+                "content": f"_... and {len(skipped_articles) - 2} more skipped keywords_"
             })
     
     # Failed articles
     if failed_articles:
+        failed_count = len(failed_articles) or 0
         elements.append({
             "tag": "markdown",
-            "content": f"### ❌ Failed Articles ({len(failed_articles)})"
+            "content": f"### ❌ Failed Articles ({failed_count})"
         })
         
-        for failed in failed_articles[:3]:  # Show max 3 failures
-            error_msg = failed.get('error', 'Unknown error')
-            # Truncate error message to 500 chars
-            if len(error_msg) > 500:
-                error_msg = error_msg[:500] + "..."
+        for i, failed in enumerate(failed_articles[:2]):  # Show max 2
+            if not failed:  # Skip None items
+                continue
+                
+            keyword = failed.get('keyword') or 'Unknown'
+            reason = failed.get('reason') or failed.get('error') or 'Unknown error'
+            # Truncate reason to 200 chars
+            if len(reason) > 200:
+                reason = reason[:200] + "..."
             
-            failed_text = f"**{failed.get('keyword', 'Unknown')}**\n"
-            failed_text += f"❌ Error: {error_msg}"
+            failed_text = f"**{keyword}**\n"
+            failed_text += f"❌ Error: {reason}"
             
             elements.append({
                 "tag": "markdown",
                 "content": failed_text
             })
         
-        if len(failed_articles) > 3:
+        if len(failed_articles) > 2:
             elements.append({
                 "tag": "markdown",
-                "content": f"_... and {len(failed_articles) - 3} more failures_"
+                "content": f"_... and {len(failed_articles) - 2} more failures_"
             })
     
     # Build payload
     payload = {
         "msg_type": "interactive",
         "card": {
-            "elements": elements
+            "elements": elements or []  # Safe empty list
         }
     }
     
     try:
         response = requests.post(webhook_url, json=payload, timeout=20)
         response.raise_for_status()
-        logger.info(f"Feishu article results card sent: {len(successful_articles)} successful, {len(failed_articles)} failed")
+        logger.info(f"Feishu article results card sent: {len(successful_articles)} successful, {len(failed_articles)} failed, {len(skipped_articles)} skipped")
     except Exception as e:
-        logger.error(f"Failed to send Feishu card: {e}")
-        raise
+        logger.error(f"Failed to send Feishu card: {e}", exc_info=True)
+        # Don't raise - Feishu failure shouldn't crash the whole workflow
 

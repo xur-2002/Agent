@@ -4,4 +4,4 @@ pytz==2024.1
 beautifulsoup4==4.12.2
 pydantic==2.5.0
 markdown==3.5.1
-openai>=1.5.0
+openai>=1.5.0  # Compatible with both OpenAI and Groq APIs

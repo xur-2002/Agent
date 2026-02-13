@@ -466,26 +466,29 @@ def run_keyword_trend_watch(task: Task) -> TaskResult:
 
 
 def run_article_generate(task: Task) -> TaskResult:
-    """Generate articles from keywords using search + LLM.
+    """Generate articles with configurable LLM provider (Groq/OpenAI/DRY_RUN).
     
-    Minimal cost closed-loop implementation:
-    - Uses Serper API to search (top 5 results) if available
-    - Uses GPT-4o-mini for article generation (cheapest model)
-    - No image generation, no email
-    - Saves articles to outputs/articles/YYYY-MM-DD/
-    - Supports DRY_RUN mode for testing
-    - Gracefully skips if SERPER_API_KEY or OPENAI_API_KEY missing
+    Features:
+    - Multi-provider support: groq (free), openai (paid), dry_run (mock)
+    - Smart error classification: insufficient_quota -> skip, transient -> retry
+    - Per-keyword tracking: successful, failed, skipped
+    - Graceful degradation: missing key -> skip, not fail
     
     Params:
         keywords: List of keywords to generate articles for
-        daily_article_count: Target number of articles per day (informational)
+        language: zh-CN or en-US
     
     Returns:
-        TaskResult with successful/failed articles list.
+        TaskResult with status=success/skipped/failed and detailed metrics
     """
-    from agent.article_generator import generate_article, save_article
+    from agent.article_generator import (
+        generate_article, save_article,
+        LLMProviderError, MissingAPIKeyError, InsufficientQuotaError,
+        RateLimitError, TransientError
+    )
+    from agent.config import Config
     
-    params = task.params
+    params = task.params or {}
     keywords = params.get("keywords", [])
     
     if isinstance(keywords, str):
@@ -498,35 +501,24 @@ def run_article_generate(task: Task) -> TaskResult:
             error="keywords param is empty"
         )
     
-    # Check required secrets
-    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
-    serper_key = os.getenv("SERPER_API_KEY", "").strip()
-    dry_run = os.getenv("DRY_RUN", "0") == "1"
-    
-    # Graceful degradation: skip if OpenAI key missing
-    if not openai_key and not dry_run:
-        logger.warning("[article_generate] OPENAI_API_KEY not set - task skipped (set DRY_RUN=1 to test locally)")
-        return TaskResult(
-            status="skipped",
-            summary="Article generation skipped - OPENAI_API_KEY not configured",
-            error="OPENAI_API_KEY missing"
-        )
+    logger.info(f"[article_generate] Starting with {len(keywords)} keyword(s)")
+    logger.info(f"[article_generate] LLM_PROVIDER={Config.LLM_PROVIDER}")
     
     try:
-        logger.info(f"[article_generate] Starting with {len(keywords)} keyword(s), DRY_RUN={dry_run}, SERPER={'available' if serper_key else 'not set'}")
-        
         # Try to get search provider, but allow None
         search_provider = None
-        if serper_key:
+        if Config.SERPER_API_KEY:
             try:
                 from agent.content_pipeline.search import get_search_provider
-                search_provider = get_search_provider(os.getenv("SEARCH_PROVIDER", "serper"))
+                search_provider = get_search_provider(Config.SEARCH_PROVIDER)
             except Exception as e:
                 logger.warning(f"[article_generate] Failed to initialize search provider: {e}")
-                search_provider = None
         
         successful_articles = []
         failed_articles = []
+        skipped_articles = []
+        provider_used = None
+        llm_error = None
         start_time = now_utc()
         
         # Generate articles for each keyword
@@ -535,39 +527,38 @@ def run_article_generate(task: Task) -> TaskResult:
                 logger.info(f"[article_generate] Processing keyword: {keyword}")
                 
                 # Search for this keyword (optional if no Serper key)
-                search_results = None
+                search_results = []
                 if search_provider:
                     try:
                         search_results = search_provider.search(keyword, limit=5)
+                        search_results = [
+                            {"title": r.title, "snippet": r.snippet, "link": r.url}
+                            for r in (search_results or [])
+                        ]
                     except Exception as e:
-                        logger.warning(f"[article_generate] Search failed for '{keyword}': {e} - continuing with empty search context")
+                        logger.warning(f"[article_generate] Search failed for '{keyword}': {e}")
                         search_results = []
-                else:
-                    logger.info(f"[article_generate] No search provider available - generating article with context-only mode for '{keyword}'")
-                    search_results = []
                 
-                # Generate article (with or without search context)
+                # Generate article
                 article = generate_article(
                     keyword=keyword,
-                    search_results=[
-                        {
-                            "title": r.title,
-                            "snippet": r.snippet,
-                            "link": r.url
-                        }
-                        for r in (search_results or [])
-                    ],
-                    dry_run=dry_run,
-                    language=params.get("language", "zh-CN")
+                    search_results=search_results,
+                    dry_run=False,  # We handle dry_run via Config.LLM_PROVIDER
+                    language=params.get("language", "zh-CN"),
+                    provider=None  # Use Config.LLM_PROVIDER
                 )
                 
                 if not article:
                     logger.error(f"[article_generate] Failed to generate article for: {keyword}")
                     failed_articles.append({
                         "keyword": keyword,
-                        "error": "Article generation failed"
+                        "reason": "Article generation returned None (parsing failed)"
                     })
                     continue
+                
+                # Record provider info from first successful article
+                if provider_used is None:
+                    provider_used = article.get("provider", "unknown")
                 
                 # Save article
                 file_path = save_article(article)
@@ -575,7 +566,7 @@ def run_article_generate(task: Task) -> TaskResult:
                     logger.error(f"[article_generate] Failed to save article for: {keyword}")
                     failed_articles.append({
                         "keyword": keyword,
-                        "error": "Failed to save article"
+                        "reason": "Failed to save article to disk"
                     })
                     continue
                 
@@ -583,57 +574,153 @@ def run_article_generate(task: Task) -> TaskResult:
                 successful_articles.append({
                     "keyword": keyword,
                     "title": article.get("title", ""),
+                    "provider": article.get("provider", "unknown"),
+                    "model": article.get("model", "unknown"),
                     "word_count": article.get("word_count", 0),
                     "file_path": file_path,
-                    "sources_count": len(article.get("sources", []))
+                    "sources_count": article.get("sources_count", 0)
                 })
-                logger.info(f"[article_generate] Successfully generated: {article.get('title', keyword)} ({article.get('word_count', 0)} words)")
+                logger.info(f"[article_generate] ✅ Generated: {article.get('title', keyword)} ({article.get('word_count', 0)} words, {article.get('provider', '?')})")
                 
-            except Exception as e:
-                logger.error(f"[article_generate] Error processing keyword {keyword}: {e}", exc_info=True)
+            except MissingAPIKeyError as e:
+                llm_error = e
+                logger.warning(f"[article_generate] ⊘ {e.provider} key missing - skipping all remaining keywords")
+                skipped_articles.append({
+                    "keyword": keyword,
+                    "reason": f"missing_{e.provider}_api_key"
+                })
+                # Once we hit a missing key error, skip remaining keywords
+                for remaining_keyword in keywords[keywords.index(keyword) + 1:]:
+                    skipped_articles.append({
+                        "keyword": remaining_keyword,
+                        "reason": f"missing_{e.provider}_api_key"
+                    })
+                break
+                
+            except InsufficientQuotaError as e:
+                llm_error = e
+                logger.warning(f"[article_generate] ⊘ {e.provider} insufficient quota/billing issue - skipping all remaining")
+                skipped_articles.append({
+                    "keyword": keyword,
+                    "reason": f"{e.provider}_insufficient_quota"
+                })
+                # Skip remaining keywords
+                for remaining_keyword in keywords[keywords.index(keyword) + 1:]:
+                    skipped_articles.append({
+                        "keyword": remaining_keyword,
+                        "reason": f"{e.provider}_insufficient_quota"
+                    })
+                break
+                
+            except RateLimitError as e:
+                logger.warning(f"[article_generate] ⚠️ {e.provider} rate limited - marking as failed (retriable)")
                 failed_articles.append({
                     "keyword": keyword,
-                    "error": str(e)[:200]
+                    "reason": f"{e.provider}_rate_limited (retriable)"
+                })
+                # Continue trying other keywords
+                
+            except TransientError as e:
+                logger.warning(f"[article_generate] ⚠️ {e.provider} transient error: {e.message}")
+                failed_articles.append({
+                    "keyword": keyword,
+                    "reason": f"{e.provider}_network_error (retriable)"
+                })
+                # Continue trying other keywords
+                
+            except LLMProviderError as e:
+                logger.error(f"[article_generate] ✗ {e.provider} error: {e.message}")
+                if e.retriable:
+                    failed_articles.append({
+                        "keyword": keyword,
+                        "reason": f"{e.provider}_error (retriable)"
+                    })
+                else:
+                    skipped_articles.append({
+                        "keyword": keyword,
+                        "reason": f"{e.provider}_error (non-retriable)"
+                    })
+                    
+            except Exception as e:
+                logger.error(f"[article_generate] ✗ Unexpected error for keyword {keyword}: {e}", exc_info=True)
+                failed_articles.append({
+                    "keyword": keyword,
+                    "reason": f"Unexpected error: {str(e)[:100]}"
                 })
         
         elapsed = (now_utc() - start_time).total_seconds()
         
-        # Build summary
+        # Determine overall status
         if successful_articles:
-            summary = f"✅ Generated {len(successful_articles)} article(s) in {elapsed:.1f}s\n"
-            for article in successful_articles:
-                summary += f"• {article['title']} ({article['word_count']} words)\n"
+            status = "success"
+            status_emoji = "✅"
+        elif skipped_articles and not failed_articles and not successful_articles:
+            status = "skipped"
+            status_emoji = "⊘"
         else:
-            summary = "No articles were generated"
+            status = "failed"
+            status_emoji = "❌"
+        
+        # Build summary
+        summary = f"{status_emoji} Article Generation Results\n"
+        summary += f"• ✅ Successful: {len(successful_articles)}\n"
+        summary += f"• ❌ Failed: {len(failed_articles)}\n"
+        summary += f"• ⊘ Skipped: {len(skipped_articles)}\n"
+        summary += f"• ⏱️ Time: {elapsed:.1f}s\n"
+        
+        if provider_used:
+            summary += f"• 🤖 Provider: {provider_used}\n"
+        
+        if status == "skipped" and llm_error:
+            summary += f"• Reason skipped: {llm_error.message}"
+        
+        if successful_articles:
+            summary += f"\n✅ Generated {len(successful_articles)} article(s):\n"
+            for article in successful_articles[:3]:
+                summary += f"  • {article['title']} ({article['word_count']} words)\n"
+            if len(successful_articles) > 3:
+                summary += f"  ... and {len(successful_articles) - 3} more\n"
         
         if failed_articles:
-            summary += f"\n❌ {len(failed_articles)} article(s) failed\n"
-            for failed in failed_articles[:3]:  # Show first 3 failures
-                summary += f"• {failed['keyword']}: {failed['error']}\n"
+            summary += f"\n❌ Failed {len(failed_articles)} article(s):\n"
+            for failed in failed_articles[:2]:
+                reason = failed.get('reason', 'Unknown')[:100]
+                summary += f"  • {failed['keyword']}: {reason}\n"
+            if len(failed_articles) > 2:
+                summary += f"  ... and {len(failed_articles) - 2} more\n"
         
-        # Return result
-        status = "success" if successful_articles else "failed"
+        if skipped_articles:
+            summary += f"\n⊘ Skipped {len(skipped_articles)} article(s):\n"
+            for skipped in skipped_articles[:2]:
+                reason = skipped.get('reason', 'Unknown')
+                summary += f"  • {skipped['keyword']}: {reason}\n"
+            if len(skipped_articles) > 2:
+                summary += f"  ... and {len(skipped_articles) - 2} more\n"
+        
         return TaskResult(
             status=status,
             summary=summary,
             metrics={
                 "successful": len(successful_articles),
                 "failed": len(failed_articles),
+                "skipped": len(skipped_articles),
                 "total_keywords": len(keywords),
                 "elapsed_seconds": elapsed,
-                "dry_run": dry_run,
+                "provider": provider_used or Config.LLM_PROVIDER,
                 "successful_articles": successful_articles,
-                "failed_articles": failed_articles
+                "failed_articles": failed_articles,
+                "skipped_articles": skipped_articles
             },
             duration_sec=elapsed
         )
         
     except Exception as e:
-        logger.error(f"[article_generate] Task error: {e}", exc_info=True)
+        logger.error(f"[article_generate] Task execution error: {e}", exc_info=True)
         return TaskResult(
             status="failed",
-            summary="Article generation task failed",
-            error=str(e)[:500]
+            summary="Article generation task failed with critical error",
+            error=str(e)[:500],
+            duration_sec=0
         )
 
 

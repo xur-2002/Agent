@@ -38,17 +38,21 @@ jobs:
       - name: Check environment variables
         run: |
           echo "🔍 Checking environment variables..."
-          python -c "
+          python3 -c "
           import os
-          print(f'SERPER_API_KEY set? {bool(os.getenv(\"SERPER_API_KEY\"))}')
+          print(f'LLM_PROVIDER: {os.getenv(\"LLM_PROVIDER\", \"groq\")}')
+          print(f'GROQ_API_KEY set? {bool(os.getenv(\"GROQ_API_KEY\"))}')
           print(f'OPENAI_API_KEY set? {bool(os.getenv(\"OPENAI_API_KEY\"))}')
+          print(f'SERPER_API_KEY set? {bool(os.getenv(\"SERPER_API_KEY\"))}')
           print(f'FEISHU_WEBHOOK_URL set? {bool(os.getenv(\"FEISHU_WEBHOOK_URL\"))}')
           "
       
       - name: Run agent
         env:
-          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'groq' }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           PERSIST_STATE: ${{ github.event.inputs.persist_state || 'none' }}
         run: python -m agent.main | tee run-log.txt
