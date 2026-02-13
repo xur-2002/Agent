@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T17:06:05.441790+00:00",
-    "next_run_at": "2026-02-13T17:07:05.441798+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T17:06:05.440629+00:00",
+    "last_run_at": "2026-02-13T17:40:24.029163+00:00",
+    "next_run_at": "2026-02-13T17:41:24.029175+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T17:40:24.023487+00:00",
     "last_error": null,
-    "attempts": 30,
-    "last_attempt_at": "2026-02-13T17:06:05.441808+00:00",
-    "run_id": "a79c8c54"
+    "attempts": 32,
+    "last_attempt_at": "2026-02-13T17:40:24.029185+00:00",
+    "run_id": "b2bf59dd"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
@@ -68,13 +68,13 @@
   "health_check_url": {
     "task_id": "health_check_url",
     "status": "success",
-    "last_run_at": "2026-02-13T17:06:05.850861+00:00",
-    "next_run_at": "2026-02-13T17:11:05.850876+00:00",
-    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.41s)",
+    "last_run_at": "2026-02-13T17:40:24.227658+00:00",
+    "next_run_at": "2026-02-13T17:45:24.227668+00:00",
+    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.20s)",
     "last_error": null,
-    "attempts": 12,
-    "last_attempt_at": "2026-02-13T17:06:05.850889+00:00",
-    "run_id": "a79c8c54"
+    "attempts": 13,
+    "last_attempt_at": "2026-02-13T17:40:24.227678+00:00",
+    "run_id": "b2bf59dd"
   },
   "github_trending_watch": {
     "task_id": "github_trending_watch",
@@ -86,5 +86,38 @@
     "attempts": 1,
     "last_attempt_at": "2026-02-13T08:56:02.975882+00:00",
     "run_id": "8de1daa8"
+  },
+  "keyword_trend_watch": {
+    "task_id": "keyword_trend_watch",
+    "status": "success",
+    "last_run_at": "2026-02-13T17:40:24.029839+00:00",
+    "next_run_at": "2026-02-13T18:40:24.029848+00:00",
+    "last_result_summary": "Monitoring 3 keyword(s):\n\u2022 ai\n\u2022 \u4e91\u8ba1\u7b97\n\u2022 web\u5f00\u53d1",
+    "last_error": null,
+    "attempts": 1,
+    "last_attempt_at": "2026-02-13T17:40:24.029860+00:00",
+    "run_id": "b2bf59dd"
+  },
+  "publish_kit_build": {
+    "task_id": "publish_kit_build",
+    "status": "success",
+    "last_run_at": "2026-02-13T17:40:24.029946+00:00",
+    "next_run_at": "2026-02-14T17:40:24.029952+00:00",
+    "last_result_summary": "Publish kit building configured:\n\u2022 Will collect today's articles\n\u2022 Generate manifests and checklists\n\u2022 Create platform-specific formats\n\u2022 Output as ZIP archive",
+    "last_error": null,
+    "attempts": 1,
+    "last_attempt_at": "2026-02-13T17:40:24.029960+00:00",
+    "run_id": "b2bf59dd"
+  },
+  "article_generate": {
+    "task_id": "article_generate",
+    "status": "failed",
+    "last_run_at": "2026-02-13T17:40:28.035201+00:00",
+    "next_run_at": "2026-02-13T17:45:28.035216+00:00",
+    "last_result_summary": "Article generation task failed",
+    "last_error": "SERPER_API_KEY not set",
+    "attempts": 1,
+    "last_attempt_at": "2026-02-13T17:40:28.035231+00:00",
+    "run_id": "b2bf59dd"
   }
 }
