@@ -39,7 +39,7 @@ jobs:
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           PERSIST_STATE: ${{ github.event.inputs.persist_state || 'none' }}
-        run: python -m agent.main
+        run: python -m agent.main | tee run-log.txt
       
       - name: Commit and push changes (if PERSIST_STATE=repo)
         if: |
@@ -57,7 +57,7 @@ jobs:
       
       - name: Upload run logs
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: agent-run-logs
           path: run-log.txt

@@ -1,21 +1,20 @@
 [
   {
     "id": "daily_briefing",
-<<<<<<< HEAD
     "title": "Daily Briefing",
     "enabled": true,
     "frequency": "every_minute",
     "timezone": "UTC",
     "params": {},
     "status": "ok",
-    "last_run_at": "2026-02-13T07:58:55.164400+00:00",
-    "next_run_at": "2026-02-13T07:59:55.164400+00:00",
-    "last_result_summary": "Daily Briefing for 2026-02-13\nGenerated at 07:58 UTC\nStatus: Agent is running successfully.\nAll systems operational.",
+    "last_run_at": "2026-02-13T08:27:34.016591+00:00",
+    "next_run_at": "2026-02-13T08:28:34.016591+00:00",
+    "last_result_summary": "Daily Briefing for 2026-02-13\nGenerated at 08:27 UTC\nStatus: Agent is running successfully.\nAll systems operational.",
     "last_error": null
   },
   {
     "id": "health_check_url",
-    "title": "Health Check - Agent",
+    "title": "Health Check - GitHub",
     "enabled": true,
     "frequency": "every_minute",
     "timezone": "UTC",
@@ -25,9 +24,9 @@
       "expected_status": 200
     },
     "status": "ok",
-    "last_run_at": "2026-02-13T07:58:55.530535+00:00",
-    "next_run_at": "2026-02-13T07:59:55.530535+00:00",
-    "last_result_summary": "\u2713 https://github.com returned 200 (0.36s)",
+    "last_run_at": "2026-02-13T08:27:34.336728+00:00",
+    "next_run_at": "2026-02-13T08:28:34.336728+00:00",
+    "last_result_summary": "\u2713 https://github.com returned 200 (0.32s)",
     "last_error": null
   },
   {
@@ -45,12 +44,5 @@
     "next_run_at": null,
     "last_result_summary": null,
     "last_error": null
-=======
-    "title": "Generate daily briefing",
-    "status": "done",
-    "last_run_at": "2026-02-13T07:45:27.332314+00:00",
-    "result_summary": "Daily Briefing for 2026-02-13\nGenerated at 07:45 UTC\nStatus: Agent is running successfully.\nAll systems operational.",
-    "error": "Invalid URL '': No scheme supplied. Perhaps you meant https://?"
->>>>>>> 03a031bc19eff75938a7800344bb7da236b4761f
   }
 ]
