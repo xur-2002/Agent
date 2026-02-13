@@ -1,0 +1,32 @@
+{
+  "title": "人工智能",
+  "keyword": "artificial intelligence",
+  "provider": "groq",
+  "model": "llama-3.1-8b-instant",
+  "sources": [
+    {
+      "title": "Artificial intelligence - Wikipedia",
+      "link": "https://en.wikipedia.org/wiki/Artificial_intelligence"
+    },
+    {
+      "title": "What Is Artificial Intelligence (AI)? - IBM",
+      "link": "https://www.ibm.com/think/topics/artificial-intelligence"
+    },
+    {
+      "title": "What is Artificial Intelligence (AI)? | Google Cloud",
+      "link": "https://cloud.google.com/learn/what-is-artificial-intelligence"
+    },
+    {
+      "title": "Artificial Intelligence (AI) - EDUCAUSE Library",
+      "link": "https://library.educause.edu/topics/infrastructure-and-research-technologies/artificial-intelligence-ai"
+    },
+    {
+      "title": "What is Artificial Intelligence? - NASA",
+      "link": "https://www.nasa.gov/what-is-artificial-intelligence/"
+    }
+  ],
+  "created_at": "2026-02-13T21:34:48.280439",
+  "word_count": 65,
+  "sources_count": 5,
+  "file_path": "outputs/articles/2026-02-13/人工智能.md"
+}

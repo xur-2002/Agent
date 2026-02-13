@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T21:11:31.805308+00:00",
-    "next_run_at": "2026-02-13T21:12:31.805321+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T21:11:31.795513+00:00",
+    "last_run_at": "2026-02-13T21:34:45.245178+00:00",
+    "next_run_at": "2026-02-13T21:35:45.245186+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T21:34:45.243871+00:00",
     "last_error": null,
-    "attempts": 52,
-    "last_attempt_at": "2026-02-13T21:11:31.805332+00:00",
-    "run_id": "6b2dbc64"
+    "attempts": 54,
+    "last_attempt_at": "2026-02-13T21:34:45.245193+00:00",
+    "run_id": "da10681e"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
@@ -68,13 +68,13 @@
   "health_check_url": {
     "task_id": "health_check_url",
     "status": "success",
-    "last_run_at": "2026-02-13T21:11:31.954332+00:00",
-    "next_run_at": "2026-02-13T21:16:31.954348+00:00",
-    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.16s)",
+    "last_run_at": "2026-02-13T21:34:45.624729+00:00",
+    "next_run_at": "2026-02-13T21:39:45.624744+00:00",
+    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.38s)",
     "last_error": null,
-    "attempts": 21,
-    "last_attempt_at": "2026-02-13T21:11:31.954361+00:00",
-    "run_id": "6b2dbc64"
+    "attempts": 22,
+    "last_attempt_at": "2026-02-13T21:34:45.624758+00:00",
+    "run_id": "da10681e"
   },
   "github_trending_watch": {
     "task_id": "github_trending_watch",
@@ -112,12 +112,12 @@
   "article_generate": {
     "task_id": "article_generate",
     "status": "success",
-    "last_run_at": "2026-02-13T21:11:38.791000+00:00",
-    "next_run_at": "2026-02-13T21:12:38.791009+00:00",
-    "last_result_summary": "\u2705 Article Generation Results\n\u2022 \u2705 Successful: 2\n\u2022 \u274c Failed: 0\n\u2022 \u2298 Skipped: 0\n\u2022 \u23f1\ufe0f Time: 7.0s\n\u2022 \ud83e\udd16 Provider: groq\n\n\u2705 Generated 2 article(s):\n  \u2022 \u4eba\u5de5\u667a\u80fd\u6982\u8ff0 (47 words)\n  \u2022 \u4e91\u8ba1\u7b97\u7684\u6982\u5ff5\u548c\u5b9a\u4e49 (47 words)\n",
+    "last_run_at": "2026-02-13T21:34:50.711950+00:00",
+    "next_run_at": "2026-02-13T21:35:50.711957+00:00",
+    "last_result_summary": "\u2705 Article Generation Results\n\u2022 \u2705 Successful: 2\n\u2022 \u274c Failed: 0\n\u2022 \u2298 Skipped: 0\n\u2022 \u23f1\ufe0f Time: 5.5s\n\u2022 \ud83e\udd16 Provider: groq\n\n\u2705 Generated 2 article(s):\n  \u2022 \u4eba\u5de5\u667a\u80fd (65 words)\n  \u2022 \u4e91\u8ba1\u7b97\u6982\u8ff0 (64 words)\n",
     "last_error": null,
-    "attempts": 9,
-    "last_attempt_at": "2026-02-13T21:11:38.791021+00:00",
-    "run_id": "6b2dbc64"
+    "attempts": 10,
+    "last_attempt_at": "2026-02-13T21:34:50.711966+00:00",
+    "run_id": "da10681e"
   }
 }
