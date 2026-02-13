@@ -485,3 +485,61 @@ def save_article(
     except Exception as e:
         logger.error(f"Failed to save article: {e}")
         return None
+
+
+def generate_article_from_material(keyword: str, material_pack: Dict[str, Any], language: str = 'zh-CN') -> Dict[str, Any]:
+    """High-level generator: try LLM, fallback to template when unavailable.
+
+    material_pack: {'sources': [{'title','link','snippet',...}], 'key_points': [...]}
+    Returns article dict compatible with save_article()
+    """
+    from agent.config import Config
+    search_results = material_pack.get('sources', [])
+
+    providers = []
+    if getattr(Config, 'LLM_PROVIDER', None):
+        providers.append(Config.LLM_PROVIDER)
+    if Config.OPENAI_API_KEY and 'openai' not in providers:
+        providers.append('openai')
+
+    # Try providers
+    for p in providers:
+        try:
+            art = generate_article(keyword=keyword, search_results=search_results, dry_run=(p=='dry_run'), language=language, provider=p)
+            if art:
+                art['fallback_used'] = False
+                return art
+        except Exception as e:
+            logger.warning(f"Provider {p} failed for keyword {keyword}: {e}")
+            continue
+
+    # Fallback template
+    title = f"{keyword} — 深度解读"
+    key_points = material_pack.get('key_points') or []
+    sources = material_pack.get('sources') or []
+    summary = (key_points[0] if key_points else f"关于 {keyword} 的概要介绍。")
+
+    body = f"# {title}\n\n## 导语\n\n{summary}\n\n## 正文\n\n"
+    if key_points:
+        for kp in key_points[:6]:
+            body += f"- {kp}\n"
+    else:
+        body += f"{keyword} 是当前关注的话题，以下为基础概述与背景信息。\n"
+
+    body += "\n## 参考来源\n\n"
+    for s in sources[:5]:
+        t = s.get('title') or s.get('link')
+        l = s.get('link')
+        body += f"- [{t}]({l})\n"
+
+    return {
+        'title': title,
+        'body': body,
+        'keyword': keyword,
+        'sources': [{'title': s.get('title',''), 'link': s.get('link','')} for s in sources],
+        'provider': 'none',
+        'model': 'none',
+        'word_count': len(body.split()),
+        'sources_count': len(sources),
+        'fallback_used': True
+    }

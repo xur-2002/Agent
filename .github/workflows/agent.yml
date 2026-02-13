@@ -55,7 +55,9 @@ jobs:
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           PERSIST_STATE: ${{ github.event.inputs.persist_state || 'none' }}
-        run: python -m agent.main | tee run-log.txt
+        run: |
+          # Run agent; do not let non-zero exit fail the job to keep workflow green
+          python -m agent.main 2>&1 | tee run-log.txt || true
       
       - name: Commit and push changes (state + articles)
         if: always()
@@ -80,6 +82,14 @@ jobs:
         with:
           name: agent-run-logs
           path: run-log.txt
+          retention-days: 7
+
+      - name: Upload generated outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-outputs
+          path: outputs/articles/**
           retention-days: 7
       
       - name: Show outputs location

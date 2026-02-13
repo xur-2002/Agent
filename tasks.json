@@ -101,4 +101,21 @@
       "minute": 0
     }
   }
+  ,
+  {
+    "id": "daily_content_batch",
+    "title": "Daily Content Batch",
+    "enabled": true,
+    "frequency": "daily",
+    "timezone": "UTC",
+    "params": {
+      "daily_quota": 3,
+      "seed_keywords": ["cloud computing", "人工智能", "边缘计算", "计算机视觉"],
+      "geo": "US",
+      "cooldown_days": 3,
+      "style": "wechat_general",
+      "email_to": "xu.r@wustl.edu",
+      "attach_markdown": true
+    }
+  }
 ]

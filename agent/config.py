@@ -44,6 +44,10 @@ class Config:
     SEARCH_PROVIDER: str = os.getenv("SEARCH_PROVIDER", "serper")
     SERPER_API_KEY: str = os.getenv("SERPER_API_KEY", "")
     BING_SEARCH_KEY: str = os.getenv("BING_SEARCH_KEY", "")
+    # Daily content generation defaults
+    CONTENT_DAILY_QUOTA: int = int(os.getenv("CONTENT_DAILY_QUOTA", "3"))
+    SEED_KEYWORDS: str = os.getenv("SEED_KEYWORDS", "")  # comma-separated
+    COOLDOWN_DAYS: int = int(os.getenv("COOLDOWN_DAYS", "3"))
     
     # Email delivery
     SMTP_HOST: str = os.getenv("SMTP_HOST", "")

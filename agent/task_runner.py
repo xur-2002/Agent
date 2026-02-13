@@ -482,7 +482,7 @@ def run_article_generate(task: Task) -> TaskResult:
         TaskResult with status=success/skipped/failed and detailed metrics
     """
     from agent.article_generator import (
-        generate_article, save_article,
+        generate_article, generate_article_from_material, save_article,
         LLMProviderError, MissingAPIKeyError, InsufficientQuotaError,
         RateLimitError, TransientError
     )
@@ -539,13 +539,16 @@ def run_article_generate(task: Task) -> TaskResult:
                         logger.warning(f"[article_generate] Search failed for '{keyword}': {e}")
                         search_results = []
                 
-                # Generate article
-                article = generate_article(
-                    keyword=keyword,
-                    search_results=search_results,
-                    dry_run=False,  # We handle dry_run via Config.LLM_PROVIDER
-                    language=params.get("language", "zh-CN"),
-                    provider=None  # Use Config.LLM_PROVIDER
+                # Build key points from search snippets
+                key_points = []
+                for s in search_results:
+                    sn = s.get('snippet') or ''
+                    if sn:
+                        key_points.append(sn.split('. ')[0])
+
+                # Generate article (use material-aware generator with fallback)
+                article = generate_article_from_material(
+                    keyword, {'sources': search_results, 'key_points': key_points}, language=params.get("language", "zh-CN")
                 )
                 
                 if not article:
@@ -754,3 +757,189 @@ def run_publish_kit_build(task: Task) -> TaskResult:
             summary="Publish kit build failed",
             error=str(e)
         )
+
+
+def run_daily_content_batch(task: Task) -> TaskResult:
+    """Daily content batch: trends -> materials -> article -> image -> save -> email/feishu summary
+
+    Params (in task.params):
+        daily_quota: int
+        seed_keywords: list
+        geo: str
+        cooldown_days: int
+        style: str
+        email_to: str
+        attach_markdown: bool
+    """
+    from agent.trends import select_topics
+    from agent.article_generator import generate_article_from_material, slugify
+    from agent.image_provider import provide_cover_image
+    from agent.email_sender import send_daily_summary
+    from agent.feishu import send_article_generation_results
+    from agent.storage import get_storage
+    import json
+    from pathlib import Path
+
+    params = task.params or {}
+    daily_quota = int(params.get('daily_quota', params.get('daily_count', 3)))
+    seed_keywords = params.get('seed_keywords') or []
+    geo = params.get('geo', params.get('TRENDS_GEO', 'US'))
+    cooldown_days = int(params.get('cooldown_days', 3))
+    style = params.get('style', 'wechat_general')
+    email_to = params.get('email_to', 'xu.r@wustl.edu')
+    attach_markdown = bool(params.get('attach_markdown', True))
+
+    # Load state recent topics if available
+    storage = get_storage()
+    recent_topics = []
+    try:
+        state_file = getattr(storage, 'state_file', None)
+        if state_file and state_file.exists():
+            with open(state_file, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            batch_state = raw.get(task.id, {}) or {}
+            recent_topics = batch_state.get('recent_topics', [])
+    except Exception:
+        recent_topics = []
+
+    state_for_trends = {'recent_topics': recent_topics}
+
+    topics = select_topics(seed_keywords=seed_keywords, daily_quota=daily_quota, geo=geo, cooldown_days=cooldown_days, state=state_for_trends)
+
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    base_output = Path('outputs') / 'articles' / today
+    base_output.mkdir(parents=True, exist_ok=True)
+
+    successful = []
+    failed = []
+    skipped = []
+
+    start_time = now_utc()
+
+    for t in topics:
+        topic = t.get('topic')
+        if not topic:
+            continue
+        try:
+            # Build material pack
+            material_pack = {'sources': [], 'key_points': []}
+            # Try using Serper search if available
+            try:
+                from agent.content_pipeline.search import get_search_provider
+                from agent.config import Config
+                if Config.SERPER_API_KEY:
+                    sp = get_search_provider(Config.SEARCH_PROVIDER)
+                    sr = sp.search(topic, limit=5)
+                    sources = []
+                    for r in (sr or []):
+                        sources.append({'title': getattr(r, 'title', ''), 'link': getattr(r, 'url', ''), 'snippet': getattr(r, 'snippet', ''), 'image': getattr(r, 'image', None)})
+                    material_pack['sources'] = sources
+                    # key_points: extract first sentences from snippets
+                    kps = []
+                    for s in sources:
+                        sn = s.get('snippet') or ''
+                        if sn:
+                            kps.append(sn.split('. ')[0])
+                    material_pack['key_points'] = kps[:6]
+            except Exception as e:
+                logger.warning(f"Material search failed for '{topic}': {e}")
+
+            # Generate article (LLM or fallback)
+            art = generate_article_from_material(topic, material_pack)
+
+            # Prepare per-topic output dir
+            slug = slugify(art.get('title') or topic)
+            article_dir = base_output / slug
+            article_dir.mkdir(parents=True, exist_ok=True)
+
+            # Save markdown and meta (per V1 spec)
+            md_path = article_dir / 'article.md'
+            with open(md_path, 'w', encoding='utf-8') as f:
+                f.write(art.get('body', ''))
+
+            meta = {
+                'title': art.get('title'),
+                'summary': (art.get('body') or '')[:300],
+                'slug': slug,
+                'keyword': art.get('keyword'),
+                'provider': art.get('provider') or 'none',
+                'fallback_used': art.get('fallback_used', False),
+                'sources_count': art.get('sources_count', 0),
+                'file_path': str(md_path),
+                'word_count': art.get('word_count', 0),
+                'created_at': datetime.utcnow().isoformat()
+            }
+            meta_path = article_dir / 'meta.json'
+            with open(meta_path, 'w', encoding='utf-8') as f:
+                json.dump(meta, f, ensure_ascii=False, indent=2)
+
+            # Try to fetch/download image
+            img_info = provide_cover_image({'sources': material_pack.get('sources', [])}, str(base_output), slug)
+            if img_info.get('image_status') == 'ok':
+                meta['image_status'] = 'ok'
+                meta['image_path'] = img_info.get('image_path')
+            else:
+                meta['image_status'] = 'skipped'
+                meta['image_reason'] = img_info.get('reason')
+
+            # append successful
+            successful.append({**meta, 'file_path': str(md_path)})
+
+        except Exception as e:
+            logger.error(f"Failed to process topic '{topic}': {e}")
+            failed.append({'keyword': topic, 'reason': str(e)})
+            continue
+
+    elapsed = (now_utc() - start_time).total_seconds()
+
+    # Determine overall status
+    if successful:
+        status = 'success'
+    elif skipped and not successful and not failed:
+        status = 'skipped'
+    else:
+        status = 'failed'
+
+    # Write index.json
+    index = {
+        'date': today,
+        'generated_count': len(successful),
+        'failed_count': len(failed),
+        'skipped_count': len(skipped),
+        'articles': successful,
+        'duration_sec': elapsed
+    }
+    with open(base_output / 'index.json', 'w', encoding='utf-8') as f:
+        json.dump(index, f, ensure_ascii=False, indent=2)
+
+    # Send Feishu summary (non-blocking)
+    try:
+        send_article_generation_results(successful_articles=successful, failed_articles=failed, skipped_articles=skipped, total_time=elapsed, provider='', run_id='')
+    except Exception as e:
+        logger.warning(f"Failed to send Feishu summary: {e}")
+
+    # Send email summary (skip if SMTP not configured)
+    try:
+        html = f"<h2>Daily Content Batch - {today}</h2><ul>"
+        attachments = []
+        for a in successful:
+            html += f"<li><b>{a.get('title')}</b><br/>{a.get('summary')}<br/>File: {a.get('file_path')}</li>"
+            if attach_markdown:
+                attachments.append(a.get('file_path'))
+        html += "</ul>"
+        email_res = send_daily_summary(subject=f"Daily Content Batch - {today}", body_html=html, attachments=attachments if attach_markdown else None, to_addr=email_to)
+    except Exception as e:
+        logger.warning(f"Email send failed/skipped: {e}")
+
+    return TaskResult(
+        status=status,
+        summary=f"Generated {len(successful)} articles, {len(failed)} failed, {len(skipped)} skipped",
+        metrics={
+            'generated_count': len(successful),
+            'failed_count': len(failed),
+            'skipped_count': len(skipped),
+            'articles': successful,
+            'duration_sec': elapsed
+        },
+        duration_sec=elapsed
+    )
