@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T16:09:18.318378+00:00",
-    "next_run_at": "2026-02-13T16:10:18.318385+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T16:09:18.317523+00:00",
+    "last_run_at": "2026-02-13T17:06:05.441790+00:00",
+    "next_run_at": "2026-02-13T17:07:05.441798+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T17:06:05.440629+00:00",
     "last_error": null,
-    "attempts": 28,
-    "last_attempt_at": "2026-02-13T16:09:18.318393+00:00",
-    "run_id": "e2bca449"
+    "attempts": 30,
+    "last_attempt_at": "2026-02-13T17:06:05.441808+00:00",
+    "run_id": "a79c8c54"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
@@ -57,24 +57,24 @@
   "rss_watch": {
     "task_id": "rss_watch",
     "status": "success",
-    "last_run_at": "2026-02-13T15:26:37.824955+00:00",
-    "next_run_at": "2026-02-13T16:26:37.824964+00:00",
-    "last_result_summary": "Found 5 new items:\n\u2022 Zed editor switching graphics lib from blade to wgpu\n\u2022 Monosketch\n\u2022 Open Source Is Not About You (2018)\n\u2022 Apple, fix my keyboard before the timer ends or I'm leavi...\n\u2022 Resizing windows on macOS Tahoe \u2013 the saga continues",
+    "last_run_at": "2026-02-13T17:06:05.602223+00:00",
+    "next_run_at": "2026-02-13T18:06:05.602233+00:00",
+    "last_result_summary": "Found 5 new items:\n\u2022 Monosketch\n\u2022 Zed editor switching graphics lib from blade to wgpu\n\u2022 Open Source Is Not About You (2018)\n\u2022 Green\u2019s Dictionary of Slang - Five hundred years of the v...\n\u2022 Faster Than Dijkstra?",
     "last_error": null,
-    "attempts": 6,
-    "last_attempt_at": "2026-02-13T15:26:37.824976+00:00",
-    "run_id": "052e79aa"
+    "attempts": 7,
+    "last_attempt_at": "2026-02-13T17:06:05.602246+00:00",
+    "run_id": "a79c8c54"
   },
   "health_check_url": {
     "task_id": "health_check_url",
     "status": "success",
-    "last_run_at": "2026-02-13T16:09:18.760657+00:00",
-    "next_run_at": "2026-02-13T16:14:18.760669+00:00",
-    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.44s)",
+    "last_run_at": "2026-02-13T17:06:05.850861+00:00",
+    "next_run_at": "2026-02-13T17:11:05.850876+00:00",
+    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.41s)",
     "last_error": null,
-    "attempts": 11,
-    "last_attempt_at": "2026-02-13T16:09:18.760679+00:00",
-    "run_id": "e2bca449"
+    "attempts": 12,
+    "last_attempt_at": "2026-02-13T17:06:05.850889+00:00",
+    "run_id": "a79c8c54"
   },
   "github_trending_watch": {
     "task_id": "github_trending_watch",
