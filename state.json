@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T17:54:35.187103+00:00",
-    "next_run_at": "2026-02-13T17:55:35.187109+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T17:54:35.185392+00:00",
+    "last_run_at": "2026-02-13T18:50:58.903966+00:00",
+    "next_run_at": "2026-02-13T18:51:58.903973+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T18:50:58.900521+00:00",
     "last_error": null,
-    "attempts": 36,
-    "last_attempt_at": "2026-02-13T17:54:35.187116+00:00",
-    "run_id": "bb4f6661"
+    "attempts": 38,
+    "last_attempt_at": "2026-02-13T18:50:58.903982+00:00",
+    "run_id": "266a684a"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
@@ -57,24 +57,24 @@
   "rss_watch": {
     "task_id": "rss_watch",
     "status": "success",
-    "last_run_at": "2026-02-13T17:06:05.602223+00:00",
-    "next_run_at": "2026-02-13T18:06:05.602233+00:00",
-    "last_result_summary": "Found 5 new items:\n\u2022 Monosketch\n\u2022 Zed editor switching graphics lib from blade to wgpu\n\u2022 Open Source Is Not About You (2018)\n\u2022 Green\u2019s Dictionary of Slang - Five hundred years of the v...\n\u2022 Faster Than Dijkstra?",
+    "last_run_at": "2026-02-13T18:50:59.158932+00:00",
+    "next_run_at": "2026-02-13T19:50:59.158941+00:00",
+    "last_result_summary": "Found 5 new items:\n\u2022 Monosketch\n\u2022 Apple, fix my keyboard before the timer ends or I'm leavi...\n\u2022 Open Source Is Not About You (2018)\n\u2022 CBP Signs Clearview AI Deal to Use Face Recognition for '...\n\u2022 Sandwich Bill of Materials",
     "last_error": null,
-    "attempts": 7,
-    "last_attempt_at": "2026-02-13T17:06:05.602246+00:00",
-    "run_id": "a79c8c54"
+    "attempts": 8,
+    "last_attempt_at": "2026-02-13T18:50:59.158953+00:00",
+    "run_id": "266a684a"
   },
   "health_check_url": {
     "task_id": "health_check_url",
     "status": "success",
-    "last_run_at": "2026-02-13T17:54:35.319182+00:00",
-    "next_run_at": "2026-02-13T17:59:35.319190+00:00",
-    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.13s)",
+    "last_run_at": "2026-02-13T18:50:59.179048+00:00",
+    "next_run_at": "2026-02-13T18:55:59.179056+00:00",
+    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.28s)",
     "last_error": null,
-    "attempts": 14,
-    "last_attempt_at": "2026-02-13T17:54:35.319200+00:00",
-    "run_id": "bb4f6661"
+    "attempts": 15,
+    "last_attempt_at": "2026-02-13T18:50:59.179066+00:00",
+    "run_id": "266a684a"
   },
   "github_trending_watch": {
     "task_id": "github_trending_watch",
@@ -90,13 +90,13 @@
   "keyword_trend_watch": {
     "task_id": "keyword_trend_watch",
     "status": "success",
-    "last_run_at": "2026-02-13T17:40:24.029839+00:00",
-    "next_run_at": "2026-02-13T18:40:24.029848+00:00",
+    "last_run_at": "2026-02-13T18:50:58.905937+00:00",
+    "next_run_at": "2026-02-13T19:50:58.905948+00:00",
     "last_result_summary": "Monitoring 3 keyword(s):\n\u2022 ai\n\u2022 \u4e91\u8ba1\u7b97\n\u2022 web\u5f00\u53d1",
     "last_error": null,
-    "attempts": 1,
-    "last_attempt_at": "2026-02-13T17:40:24.029860+00:00",
-    "run_id": "b2bf59dd"
+    "attempts": 2,
+    "last_attempt_at": "2026-02-13T18:50:58.905959+00:00",
+    "run_id": "266a684a"
   },
   "publish_kit_build": {
     "task_id": "publish_kit_build",
@@ -112,12 +112,12 @@
   "article_generate": {
     "task_id": "article_generate",
     "status": "failed",
-    "last_run_at": "2026-02-13T17:54:39.195157+00:00",
-    "next_run_at": "2026-02-13T17:59:39.195171+00:00",
+    "last_run_at": "2026-02-13T18:51:02.912735+00:00",
+    "next_run_at": "2026-02-13T18:56:02.912744+00:00",
     "last_result_summary": "Article generation task failed",
     "last_error": "SERPER_API_KEY not set",
-    "attempts": 2,
-    "last_attempt_at": "2026-02-13T17:54:39.195188+00:00",
-    "run_id": "bb4f6661"
+    "attempts": 3,
+    "last_attempt_at": "2026-02-13T18:51:02.912752+00:00",
+    "run_id": "266a684a"
   }
 }
