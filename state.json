@@ -2,13 +2,13 @@
   "heartbeat": {
     "task_id": "heartbeat",
     "status": "success",
-    "last_run_at": "2026-02-13T20:16:06.399376+00:00",
-    "next_run_at": "2026-02-13T20:17:06.399384+00:00",
-    "last_result_summary": "Heartbeat at 2026-02-13T20:16:06.398306+00:00",
+    "last_run_at": "2026-02-13T20:31:07.778766+00:00",
+    "next_run_at": "2026-02-13T20:32:07.778770+00:00",
+    "last_result_summary": "Heartbeat at 2026-02-13T20:31:07.777621+00:00",
     "last_error": null,
-    "attempts": 46,
-    "last_attempt_at": "2026-02-13T20:16:06.399393+00:00",
-    "run_id": "9fd6a46b"
+    "attempts": 48,
+    "last_attempt_at": "2026-02-13T20:31:07.778776+00:00",
+    "run_id": "bf7e0843"
   },
   "daily_briefing": {
     "task_id": "daily_briefing",
@@ -68,13 +68,13 @@
   "health_check_url": {
     "task_id": "health_check_url",
     "status": "success",
-    "last_run_at": "2026-02-13T20:16:06.462759+00:00",
-    "next_run_at": "2026-02-13T20:21:06.462769+00:00",
-    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.06s)",
+    "last_run_at": "2026-02-13T20:31:07.913222+00:00",
+    "next_run_at": "2026-02-13T20:36:07.913236+00:00",
+    "last_result_summary": "\u2713 https://github.com \u2192 200 (0.13s)",
     "last_error": null,
-    "attempts": 18,
-    "last_attempt_at": "2026-02-13T20:16:06.462779+00:00",
-    "run_id": "9fd6a46b"
+    "attempts": 19,
+    "last_attempt_at": "2026-02-13T20:31:07.913248+00:00",
+    "run_id": "bf7e0843"
   },
   "github_trending_watch": {
     "task_id": "github_trending_watch",
@@ -112,12 +112,12 @@
   "article_generate": {
     "task_id": "article_generate",
     "status": "failed",
-    "last_run_at": "2026-02-13T20:16:14.817291+00:00",
-    "next_run_at": "2026-02-13T20:17:14.817302+00:00",
-    "last_result_summary": "Article generation task failed",
-    "last_error": "TaskResult.__init__() got an unexpected keyword argument 'data'",
-    "attempts": 6,
-    "last_attempt_at": "2026-02-13T20:16:14.817316+00:00",
-    "run_id": "9fd6a46b"
+    "last_run_at": "2026-02-13T20:31:30.317668+00:00",
+    "next_run_at": "2026-02-13T20:32:30.317685+00:00",
+    "last_result_summary": "No articles were generated\n\u274c 2 article(s) failed\n\u2022 artificial intelligence: Article generation failed\n\u2022 cloud computing: Article generation failed\n",
+    "last_error": null,
+    "attempts": 7,
+    "last_attempt_at": "2026-02-13T20:31:30.317699+00:00",
+    "run_id": "bf7e0843"
   }
 }
