@@ -93,3 +93,59 @@ def select_topics(seed_keywords: List[str], daily_quota: int = 3, geo: str = 'US
 
     # Trim to daily_quota
     return topics[:daily_quota]
+
+
+def select_topics_for_persona(persona: Dict[str, Any], daily_quota: int = 3, geo: str = 'CN', cooldown_days: int = 3, state: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    """Select topics relevant to a restaurant persona.
+
+    Uses `select_topics` as primary source then filters by relevance to persona.
+    Falls back to persona seed queries if relevance is low.
+    """
+    # Build seed queries tuned for restaurants
+    city = persona.get('city', '')
+    seeds = [
+        f"本周美食 热搜 {city}",
+        f"{persona.get('cuisine','')} 餐厅 热门",
+        "餐厅 营销",
+        "团购 外卖",
+        "节日 餐厅 活动",
+        "周末 约会 餐厅",
+    ]
+
+    # Get general trends first
+    topics = select_topics(seeds, daily_quota=daily_quota, geo=geo, cooldown_days=cooldown_days, state=state)
+
+    # Relevance filter: require topic to match at least one of the strong keywords
+    must_keywords = ['台州', '临海', '浙江', '海鲜', '台州菜', '探店', '餐厅', '宴请', '年夜饭', '节日', '周末']
+    blacklist = ['体育', '明星', '演唱会', '电影首映', '海外', '国际政', '转会']
+
+    relevant = []
+    for t in topics:
+        txt = (t.get('topic') or '').lower()
+        # filter obvious blacklist
+        if any(b in txt for b in blacklist):
+            continue
+
+        score = t.get('score', 0)
+        # boost on explicit keyword match
+        for kw in must_keywords:
+            if kw in txt:
+                score += 25
+        # also boost if source indicates food domain
+        src = (t.get('source') or '').lower()
+        if any(k in src for k in ['food', 'meishi', 'dianping', '大众点评', 'meituan', '美团']):
+            score += 10
+
+        t['score'] = score
+        if score >= 20:
+            relevant.append(t)
+
+    # If not enough relevant topics, use persona-focused seeds (region+food scenarios)
+    if len(relevant) < daily_quota:
+        for s in seeds:
+            if len(relevant) >= daily_quota:
+                break
+            relevant.append({'topic': s, 'score': 25, 'source': 'persona_seed', 'explain': 'persona seed fallback'})
+
+    # Trim and return
+    return relevant[:daily_quota]

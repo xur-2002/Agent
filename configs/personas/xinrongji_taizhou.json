@@ -1,0 +1,14 @@
+{
+  "id": "xinrongji_taizhou",
+  "industry": "restaurant",
+  "brand_name": "新荣记（台州临海起源）",
+  "city": "台州",
+  "origin_story": "1995 年起源于临海，传承台州海鲜与台州菜的独特风味。",
+  "cuisine_keywords": ["台州菜", "海鲜", "时令", "带鱼", "黄鱼", "沙蒜", "豆面"],
+  "target_audience": ["家庭", "宴请", "游客"],
+  "scenarios": ["家庭聚餐", "商务宴请", "游客探店", "节日活动"],
+  "tone": "亲切、专业、接地气",
+  "signature_dishes": ["红烧黄鱼", "带鱼小炒", "沙蒜蒸蟹"],
+  "compliance_rules": ["不得编造新闻或数据", "引用须在参考来源列明"],
+  "cta_fields": {"booking_url": "", "wechat": "", "phone": ""}
+}

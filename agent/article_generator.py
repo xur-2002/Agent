@@ -740,3 +740,161 @@ def generate_article_in_style(
         'fallback_used': True
     }
 
+
+def generate_wechat_restaurant_article(topic: str, persona: dict, sources: list) -> dict:
+    """Generate a WeChat-style Chinese article for restaurants grounded in provided sources.
+
+    The function extracts bullet facts from snippets and assembles a publishable article.
+    Does NOT invent facts; when sources are missing or insufficient, returns an evergreen
+    promotional article clearly marked as not news-based.
+    """
+    # Normalize incoming sources (accept either SearchResult dataclass or dict)
+    def _normalize_source(s):
+        if isinstance(s, dict):
+            title = s.get('title') or s.get('link') or ''
+            url = s.get('url') or s.get('link') or ''
+            snippet = s.get('snippet') or ''
+        else:
+            # assume object with attributes
+            title = getattr(s, 'title', '') or getattr(s, 'domain', '') or ''
+            url = getattr(s, 'url', '') or getattr(s, 'link', '') or ''
+            snippet = getattr(s, 'snippet', '') or ''
+        return {'title': title, 'url': url, 'snippet': snippet}
+
+    # Extract up to 5 normalized sources
+    top_sources = [ _normalize_source(s) for s in (sources or []) ][:5]
+
+    # Extract simple bullet facts from snippets
+    facts = []
+    for s in top_sources:
+        sn = s.get('snippet', '')
+        first = sn.split('。')[0].strip() if sn else ''
+        if first:
+            facts.append(first)
+
+    # Build title with hook
+    title = f"{topic}：适合{persona.get('target_audience','顾客')}的餐厅营销新点子"
+
+    # If not enough sources, fallback to evergreen playbook
+    if len(top_sources) < 5:
+        body = f"# {title}\n\n"
+        body += f"## 导语\n\n本篇为餐厅运营提供一个安全的实用指南，基于行业最佳实践撰写，并非新闻报道。\n\n"
+        body += "## 周末促销与活动玩法（长期有效）\n\n"
+        body += "1. 周末家庭套餐：结合本店卖点推出亲子套餐并附加儿童优惠。\n"
+        body += "2. 时段折扣：工作日午餐推出固定折扣吸引上班族。\n"
+        body += "3. 私域拉新：扫码送菜券，建立微信群/公众号会员池。\n\n"
+        body += "## 场景化营销（菜单与场景）\n\n"
+        for sp in persona.get('selling_points', [])[:3]:
+            body += f"- 将“{sp}”融入菜单描述与场景布置，提升转化。\n"
+        body += "\n## 行动号召\n\n请通过以下方式预约或了解更多：\n"
+        contact = persona.get('contact', {})
+        if contact.get('booking_url'):
+            body += f"- 在线预订：{contact.get('booking_url')}\n"
+        if contact.get('wechat'):
+            body += f"- 微信：{contact.get('wechat')}（用于私域引流）\n"
+        body += "\n## 风险提示\n\n本篇非新闻报道，如需引用外部数据请注明来源。\n\n"
+        body += "## 参考来源\n\n"
+        for s in top_sources:
+            url = s.get('url', '')
+            body += f"- {url}\n"
+
+        # ensure utf-8 and length: expand actionable steps if too short
+        from math import ceil
+        # count Chinese chars
+        ch_count = zh_char_count(body)
+        if ch_count < 600:
+            # elaborate actionable items to reach threshold (no lorem)
+            extra = []
+            for i in range(4):
+                extra.append(f"针对第{i+1}点，建议：细化执行步骤、物料准备、预计成本与目标人群（示例）。")
+            body += "\n\n" + "\n".join(extra)
+
+        return {
+            'title': title,
+            'body': body,
+            'keyword': topic,
+            'sources': [{'title': s.get('title',''), 'link': s.get('url','')} for s in top_sources],
+            'provider': 'search_fallback' if top_sources else 'none',
+            'model': 'none',
+            'word_count': zh_char_count(body),
+            'sources_count': len(top_sources),
+            'fallback_used': True
+        }
+
+    # Otherwise build grounded article
+    body = f"# {title}\n\n"
+    body += "## 导语\n\n"
+    if facts:
+        body += facts[0] + "。\n\n"
+    else:
+        body += f"关于{topic}的近期讨论可为餐厅营销提供启发。\n\n"
+
+    # Hotspot bullets with reference indices
+    body += "## 热点速读（要点并标注来源）\n\n"
+    for i, fct in enumerate(facts[:5], start=1):
+        body += f"{i}. {fct} [{i}]\n\n"
+
+    body += "\n## 本店怎么借势（4 条可执行动作）\n\n"
+    actions = []
+    # Build 4 concrete actions using persona and signature dishes
+    sig = persona.get('signature_dishes', [])
+    scenarios = persona.get('scenarios', [])
+    for idx in range(4):
+        dish = sig[idx % len(sig)] if sig else '招牌菜'
+        scen = scenarios[idx % len(scenarios)] if scenarios else '家庭聚餐'
+        act = (f"动作{idx+1}：在{scen}场景推出“{dish}”主题套餐，目标人群：{persona.get('target_audience', ['顾客'])[0]}；"
+               f"实施步骤：菜单定价→配图→会员/社群导流→时段限定；预期效果：提高客单与回头率。")
+        actions.append(act)
+        body += f"- {act}\n\n"
+
+    body += "\n## 行动号召（CTA，可直接复制）\n\n"
+    booking = persona.get('cta_fields', {}).get('booking_url') or persona.get('contact', {}).get('booking_url') or '请填写预订链接'
+    wechat = persona.get('cta_fields', {}).get('wechat') or persona.get('contact', {}).get('wechat') or '请填写公众号/微信号'
+    # choose two of reservation/到店/私域
+    body += f"- 立即预约：{booking}（在线/电话）\n"
+    body += f"- 私域引流：关注公众号 {wechat}，领取到店优惠券\n\n"
+
+    body += "## 风险提示\n\n"
+    body += "- 本文仅基于公开来源摘要撰写，文中未明确数据之处请以原始来源为准，禁止直接对外宣称未经证实的信息。\n\n"
+
+    body += "## 参考来源\n\n"
+    for idx, s in enumerate(top_sources, start=1):
+        url = s.get('url', '')
+        title = s.get('title', '') or url
+        body += f"{idx}. {title} \n   {url}\n\n"
+
+    # Enforce Chinese character length between 600-900 by elaborating actions if needed
+    ch_cnt = zh_char_count(body)
+    if ch_cnt < 600:
+        # expand action details (concrete checklist) until length reached
+        i = 0
+        while zh_char_count(body) < 650 and i < 6:
+            body += f"- 运营细节补充：活动素材准备（海报/菜单/话术），执行负责人，时间表，预算估算。\n"
+            i += 1
+
+    # final word_count as Chinese char count
+    return {
+        'title': title,
+        'title_options': [title, f"{topic} 折扣到店指南", f"探店：{topic} 与新荣记的联动"],
+        'body': body,
+        'keyword': topic,
+        'sources': [{'title': s.get('title',''), 'link': s.get('url','')} for s in top_sources],
+        'provider': 'serper',
+        'model': 'search_based',
+        'word_count': zh_char_count(body),
+        'sources_count': len(top_sources),
+        'fallback_used': False
+    }
+
+    return {
+        'title': title,
+        'body': body,
+        'keyword': topic,
+        'sources': [{'title': s.get('title',''), 'link': s.get('url','')} for s in top_sources],
+        'provider': 'serper',
+        'model': 'search_based',
+        'word_count': len(body.split()),
+        'sources_count': len(top_sources),
+        'fallback_used': False
+    }
+

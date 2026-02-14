@@ -443,13 +443,19 @@ def send_article_generation_results(
             keyword = article.get('keyword') or 'N/A'
             word_count = article.get('word_count') or 0
             sources_count = article.get('sources_count') or 0
+            # Prefer inline content or a readable link over local file paths
             file_path = article.get('file_path') or 'N/A'
-            
+            read_content = article.get('body')
             article_text = f"**{title_text}**\n"
             article_text += f"📌 Keyword: `{keyword}`\n"
             article_text += f"📝 Words: {word_count}\n"
             article_text += f"📚 Sources: {sources_count}\n"
-            article_text += f"📄 File: `{file_path}`"
+            if read_content:
+                # Include a short preview and a Read section will show full body below
+                preview = read_content[:1000]
+                article_text += f"\n\n{preview}\n\n"
+            else:
+                article_text += f"\n\n📄 File: {file_path}\n"
             
             elements.append({
                 "tag": "markdown",
@@ -541,4 +547,14 @@ def send_article_generation_results(
     except Exception as e:
         logger.error(f"Failed to send Feishu card: {e}", exc_info=True)
         # Don't raise - Feishu failure shouldn't crash the whole workflow
+    # Additionally, if there are successful articles with full bodies, append first full article body as a separate message
+    try:
+        for art in successful_articles or []:
+            body = art.get('body')
+            if body:
+                # Send a follow-up text with the full body (markdown) so users can read it in Feishu
+                send_text(body)
+                break
+    except Exception:
+        logger.debug('Failed to send full article body as follow-up')
 

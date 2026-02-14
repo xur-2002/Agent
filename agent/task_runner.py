@@ -109,6 +109,8 @@ def run_task(task: Task) -> TaskResult:
             result = run_keyword_trend_watch(task)
         elif task_id == "article_generate":
             result = run_article_generate(task)
+        elif task_id == "article_generate_restaurant":
+            result = run_article_generate_restaurant(task)
         elif task_id == "daily_content_batch":
             result = run_daily_content_batch(task)
         elif task_id == "publish_kit_build":
@@ -504,12 +506,28 @@ def run_article_generate(task: Task) -> TaskResult:
     # Start high-resolution timer for duration measurement
     start_perf = time.perf_counter()
 
+    # Ensure search-related tracking variables are always defined
+    search_errors: list = []
+    search_provider_used = None
+    search_attempted = False
+
     if not keywords:
         elapsed_perf = max(time.perf_counter() - start_perf, 1e-6)
+        metrics = {
+            "successful_articles": [],
+            "failed_articles": [],
+            "skipped_articles": [],
+            "sources_count": 0,
+            "provider": None,
+            "search_provider_used": None,
+            "search_attempted": False,
+            "search_errors": []
+        }
         return TaskResult(
             status="failed",
             summary="No keywords provided",
             error="keywords param is empty",
+            metrics=metrics,
             duration_sec=elapsed_perf
         )
     
@@ -517,14 +535,25 @@ def run_article_generate(task: Task) -> TaskResult:
     logger.info(f"[article_generate] LLM_PROVIDER={Config.LLM_PROVIDER}")
     
     try:
-        # Try to get search provider, but allow None
+        # Try to get search provider, but allow None. Track attempts and errors.
         search_provider = None
+        total_sources_count = 0
         if Config.SERPER_API_KEY:
+            # We attempted to initialize a search provider
+            search_attempted = True
             try:
                 from agent.content_pipeline.search import get_search_provider
                 search_provider = get_search_provider(Config.SEARCH_PROVIDER)
+                # record which provider was initialized
+                search_provider_used = Config.SEARCH_PROVIDER
             except Exception as e:
-                logger.warning(f"[article_generate] Failed to initialize search provider: {e}")
+                logger.error(f"[article_generate] Failed to initialize search provider: {e}")
+                # track initialization errors for metrics
+                search_errors.append(str(e))
+        else:
+            # No API key/config provided — search skipped
+            search_provider = None
+            search_attempted = False
         
         successful_articles = []
         failed_articles = []
@@ -542,13 +571,26 @@ def run_article_generate(task: Task) -> TaskResult:
                 search_results = []
                 if search_provider:
                     try:
-                        search_results = search_provider.search(keyword, limit=5)
-                        search_results = [
-                            {"title": r.title, "snippet": r.snippet, "link": r.url}
-                            for r in (search_results or [])
-                        ]
+                        sr = search_provider.search(keyword, limit=5)
+                        # Normalize SearchResult objects into simple dicts
+                        search_results = []
+                        for r in (sr or []):
+                            try:
+                                search_results.append({
+                                    "title": getattr(r, 'title', '') or '',
+                                    "url": getattr(r, 'url', '') or getattr(r, 'link', ''),
+                                    "snippet": getattr(r, 'snippet', '') or ''
+                                })
+                            except Exception:
+                                search_results.append({
+                                    "title": str(r),
+                                    "url": '',
+                                    "snippet": ''
+                                })
+                        total_sources_count += len(search_results)
                     except Exception as e:
-                        logger.warning(f"[article_generate] Search failed for '{keyword}': {e}")
+                        logger.error(f"[article_generate] Search failed for '{keyword}': {e}")
+                        search_errors.append(str(e))
                         search_results = []
                 
                 # Build key points from search snippets
@@ -593,7 +635,7 @@ def run_article_generate(task: Task) -> TaskResult:
                     "model": article.get("model", "unknown"),
                     "word_count": article.get("word_count", 0),
                     "file_path": file_path,
-                    "sources_count": article.get("sources_count", 0)
+                    "sources_count": article.get("sources_count", 0) or len(search_results)
                 })
                 logger.info(f"[article_generate] ✅ Generated: {article.get('title', keyword)} ({article.get('word_count', 0)} words, {article.get('provider', '?')})")
                 
@@ -628,7 +670,32 @@ def run_article_generate(task: Task) -> TaskResult:
                 break
                 
             except RateLimitError as e:
-                logger.warning(f"[article_generate] ⚠️ {e.provider} rate limited - marking as failed (retriable)")
+                logger.warning(f"[article_generate] ⚠️ {e.provider} rate limited - attempting fallback generation")
+                try:
+                    # Attempt fallback generation (generate_article_from_material will try providers then template)
+                    fallback_art = generate_article_from_material(
+                        keyword, {'sources': search_results, 'key_points': key_points}, language=params.get("language", "zh-CN")
+                    )
+                    if fallback_art:
+                        file_path = save_article(fallback_art)
+                        if file_path:
+                            successful_articles.append({
+                                "keyword": keyword,
+                                "title": fallback_art.get("title", ""),
+                                "provider": fallback_art.get("provider", "none"),
+                                "model": fallback_art.get("model", "none"),
+                                "word_count": fallback_art.get("word_count", 0),
+                                "file_path": file_path,
+                                "sources_count": fallback_art.get("sources_count", 0) or len(search_results),
+                                "fallback_used": fallback_art.get("fallback_used", True)
+                            })
+                            logger.info(f"[article_generate] ✅ Fallback generated for {keyword}")
+                            # continue to next keyword
+                            continue
+                except Exception as fe:
+                    logger.error(f"[article_generate] Fallback generation also failed for {keyword}: {fe}")
+
+                # If fallback didn't succeed, mark as failed (retriable)
                 failed_articles.append({
                     "keyword": keyword,
                     "reason": f"{e.provider}_rate_limited (retriable)"
@@ -724,6 +791,10 @@ def run_article_generate(task: Task) -> TaskResult:
                 "total_keywords": len(keywords),
                 "elapsed_seconds": elapsed,
                 "provider": provider_used or Config.LLM_PROVIDER,
+                "search_provider_used": search_provider_used,
+                "search_attempted": search_attempted,
+                "sources_count": total_sources_count,
+                "search_errors": search_errors,
                 "successful_articles": successful_articles,
                 "failed_articles": failed_articles,
                 "skipped_articles": skipped_articles
@@ -734,12 +805,168 @@ def run_article_generate(task: Task) -> TaskResult:
     except Exception as e:
         logger.error(f"[article_generate] Task execution error: {e}", exc_info=True)
         elapsed_perf = max(time.perf_counter() - start_perf, 1e-6)
+        # Ensure metrics keys exist even on fatal exception
+        metrics = {
+            "successful_articles": globals().get('successful_articles', []) or [],
+            "failed_articles": globals().get('failed_articles', []) or [],
+            "skipped_articles": globals().get('skipped_articles', []) or [],
+            "sources_count": globals().get('total_sources_count', 0) or 0,
+            "provider": globals().get('provider_used', None),
+            "search_provider_used": globals().get('search_provider_used', None),
+            "search_attempted": globals().get('search_attempted', False),
+            "search_errors": globals().get('search_errors', []) or []
+        }
         return TaskResult(
             status="failed",
             summary="Article generation task failed with critical error",
             error=str(e)[:500],
+            metrics=metrics,
             duration_sec=elapsed_perf
         )
+
+
+def run_article_generate_restaurant(task: Task) -> TaskResult:
+    """Restaurant-focused article generation flow for WeChat.
+
+    Expects `task.params` to include either `persona` (dict) or `persona_id`.
+    Produces outputs/articles/YYYY-MM-DD/<slug>/wechat.md and meta.json and updates index.json.
+    Sends Feishu card with article body (not local Windows path).
+    """
+    from agent.article_generator import generate_wechat_restaurant_article
+    from agent.content_pipeline.search import search_sources
+    from agent.trends import select_topics_for_persona
+    from agent.feishu import send_article_generation_results
+    import json
+
+    params = task.params or {}
+    persona = params.get('persona')
+    persona_id = params.get('persona_id')
+    if not persona and persona_id:
+        # Try load from configs
+        try:
+            ppath = Path('configs/personas') / f"{persona_id}.json"
+            with open(ppath, 'r', encoding='utf-8') as fh:
+                persona = json.load(fh)
+        except Exception as e:
+            persona = None
+
+    if not persona:
+        # fallback to default restaurant persona
+        try:
+            with open(Path('configs/personas') / 'restaurant.json', 'r', encoding='utf-8') as fh:
+                persona = json.load(fh)
+        except Exception as e:
+            return TaskResult(status='failed', summary='No persona available', error=str(e))
+
+    # select topics
+    topics = select_topics_for_persona(persona, daily_quota=params.get('daily_quota', 3), geo=persona.get('city','CN'))
+
+    outputs_base = Path('outputs/articles')
+    today = datetime.now().strftime('%Y-%m-%d')
+    day_dir = outputs_base / today
+    day_dir.mkdir(parents=True, exist_ok=True)
+
+    index = {
+        'date': today,
+        'persona_id': persona.get('persona_id'),
+        'industry': 'restaurant',
+        'city': persona.get('city'),
+        'target_audience': persona.get('target_audience'),
+        'topics': []
+    }
+
+    successful = []
+    failed = []
+    skipped = []
+    total_sources_count = 0
+    all_search_errors = []
+
+    for t in topics:
+        topic_text = t.get('topic')
+        # Search
+        results, search_errors = search_sources(topic_text, persona=persona, limit=7)
+        all_search_errors.extend(search_errors)
+        total_sources_count += len(results or [])
+
+        # Build sources list for generator (keep title,url,snippet) - compatible with SearchResult or dict
+        norm_sources = []
+        for r in (results or []):
+            if isinstance(r, dict):
+                title = r.get('title') or r.get('link') or ''
+                url = r.get('url') or r.get('link') or ''
+                snippet = r.get('snippet') or ''
+            else:
+                title = getattr(r, 'title', '') or getattr(r, 'domain', '') or ''
+                url = getattr(r, 'url', '') or getattr(r, 'link', '') or ''
+                snippet = getattr(r, 'snippet', '') or ''
+            norm_sources.append({'title': title, 'url': url, 'snippet': snippet})
+
+        # If insufficient sources, mark fallback_used
+        fallback = False
+        if len(norm_sources) < 5:
+            fallback = True
+
+        article = generate_wechat_restaurant_article(topic_text, persona, results)
+
+        # Save to outputs/articles/YYYY-MM-DD/<slug>/wechat.md and meta.json
+        slug = slugify(article.get('title') or topic_text)[:40]
+        art_dir = day_dir / slug
+        art_dir.mkdir(parents=True, exist_ok=True)
+        md_path = art_dir / 'wechat.md'
+        meta_path = art_dir / 'meta.json'
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(article.get('body', ''))
+        meta = {
+            'title': article.get('title'),
+            'keyword': article.get('keyword'),
+            'persona': persona,
+            'provider': article.get('provider'),
+            'fallback_used': article.get('fallback_used', False),
+            'sources': article.get('sources', []),
+            'file_path': str(md_path)
+        }
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+
+        # Append to index
+        index['topics'].append({
+            'topic': topic_text,
+            'slug': slug,
+            'sources_count': len(norm_sources),
+            'sources': norm_sources,
+            'fallback_used': fallback,
+            'meta_path': str(meta_path)
+        })
+
+        successful.append({
+            'title': article.get('title'),
+            'keyword': article.get('keyword'),
+            'word_count': article.get('word_count'),
+            'sources_count': len(norm_sources),
+            'file_path': str(md_path),
+            'provider': article.get('provider'),
+            'body': article.get('body')
+        })
+
+    # write index.json
+    with open(day_dir / 'index.json', 'w', encoding='utf-8') as f:
+        json.dump(index, f, ensure_ascii=False, indent=2)
+
+    # Send Feishu with article bodies (include first article body in Read section)
+    try:
+        send_article_generation_results(successful_articles=successful, failed_articles=failed, skipped_articles=skipped, total_time=0, provider='mixed', run_id='')
+    except Exception:
+        logger.exception('Failed to send Feishu results')
+
+    metrics = {
+        'successful_articles': successful,
+        'failed_articles': failed,
+        'skipped_articles': skipped,
+        'sources_count': total_sources_count,
+        'search_errors': all_search_errors
+    }
+
+    return TaskResult(status='success', summary=f'Generated {len(successful)} articles', metrics=metrics)
 
 
 def run_publish_kit_build(task: Task) -> TaskResult:
