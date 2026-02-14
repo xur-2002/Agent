@@ -6,6 +6,7 @@ import time
 import feedparser
 import requests
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Any, Optional
 
 from agent.models import Task, TaskResult
