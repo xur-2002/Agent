@@ -200,3 +200,37 @@ def get_search_provider(provider: str = "serper") -> SearchProvider:
     
     else:
         raise ValueError(f"Unknown search provider: {provider}")
+
+
+def search_sources(query: str, persona: dict = None, limit: int = 5, retries: int = 2, backoff: float = 1.0):
+    """High-level wrapper: run search with retries/backoff and always return (results_list, errors_list).
+
+    Returns:
+        (List[SearchResult], List[str])
+    """
+    errors = []
+    results = []
+    provider_name = os.getenv('SEARCH_PROVIDER', 'serper')
+
+    # Pick provider
+    try:
+        provider = get_search_provider(provider_name)
+    except Exception as e:
+        errors.append(f"init:{str(e)}")
+        return ([], errors)
+
+    attempt = 0
+    while attempt <= retries:
+        try:
+            results = provider.search(query, limit=limit)
+            # ensure list
+            if results is None:
+                results = []
+            return (results, errors)
+        except Exception as e:
+            err = str(e)
+            errors.append(err)
+            attempt += 1
+            time.sleep(backoff * attempt)
+
+    return (results or [], errors)

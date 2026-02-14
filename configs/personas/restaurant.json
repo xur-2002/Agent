@@ -1,0 +1,17 @@
+{
+  "persona_id": "resto-001",
+  "industry": "restaurant",
+  "city": "上海",
+  "cuisine": "中餐",
+  "price_level": "中等",
+  "selling_points": ["家庭友好", "地道口味", "本地食材"],
+  "target_audience": "本地家庭和上班族",
+  "tone": "专业且亲切",
+  "banned_claims": ["统计数据", "未证实新闻"],
+  "cta": "预约/到店/加入会员",
+  "contact": {
+    "phone": "+86-021-0000-0000",
+    "wechat": "resto_wechat",
+    "booking_url": "https://example.com/book"
+  }
+}
