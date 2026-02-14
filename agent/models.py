@@ -44,7 +44,7 @@ class TaskState:
 class Task:
     """Task configuration (mostly static)."""
     id: str
-    title: str
+    title: str = ""
     enabled: bool = True
     frequency: str = "daily"  # every_minute, hourly, daily, weekly, once_per_day
     timezone: str = "UTC"
