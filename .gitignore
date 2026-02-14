@@ -39,3 +39,6 @@ ENV/
 
 # Temporary files
 *.tmp
+
+state.json
+
