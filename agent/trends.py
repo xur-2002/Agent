@@ -1,10 +1,13 @@
 """Google Trends RSS based topic selector with cooldown and fallback to seed keywords.
 
 Provides: select_topics(seed_keywords, daily_quota, geo, cooldown_days, state)
+
+Note: daily_quota can be overridden by env var TOP_N
 """
 from typing import List, Dict, Any
 import feedparser
 import random
+import os
 from datetime import datetime, timedelta
 import logging
 
@@ -34,7 +37,14 @@ def select_topics(seed_keywords: List[str], daily_quota: int = 3, geo: str = 'US
     """Return list of topics (dict) of length up to daily_quota.
 
     state: dict with previously generated topics {'recent_topics': [{'topic': str, 'date': 'YYYY-MM-DD'}]}
+    
+    Supports env var TOP_N to override daily_quota
     """
+    # Override daily_quota with TOP_N env var if set
+    top_n_env = os.getenv('TOP_N', '').strip()
+    if top_n_env and top_n_env.isdigit():
+        daily_quota = int(top_n_env)
+    
     if state is None:
         state = {}
     recent = set()
@@ -51,7 +61,8 @@ def select_topics(seed_keywords: List[str], daily_quota: int = 3, geo: str = 'US
     topics = []
     try:
         items = _fetch_trends_rss(geo)
-        for it in items:
+        # Fetch enough candidates (at least 30) to ensure quality
+        for it in items[:max(30, daily_quota * 10)]:
             if len(topics) >= daily_quota:
                 break
             t = it.get('topic')

@@ -56,6 +56,17 @@ class Config:
     SMTP_PASS: str = os.getenv("SMTP_PASS", "")
     SMTP_TO: str = os.getenv("SMTP_TO", "")
     
+    # V1: Content generation (dual versions)
+    TOP_N: int = int(os.getenv("TOP_N", "3"))  # Number of topics to select
+    WECHAT_WORDS_MIN: int = int(os.getenv("WECHAT_WORDS_MIN", "800"))
+    WECHAT_WORDS_MAX: int = int(os.getenv("WECHAT_WORDS_MAX", "1200"))
+    XHS_WORDS_MIN: int = int(os.getenv("XHS_WORDS_MIN", "300"))
+    XHS_WORDS_MAX: int = int(os.getenv("XHS_WORDS_MAX", "600"))
+    
+    # V1: Image search (Bing or Google Images)
+    IMAGE_SEARCH_PROVIDER: str = os.getenv("IMAGE_SEARCH_PROVIDER", "bing")  # bing, google
+    BING_SEARCH_SUBSCRIPTION_KEY: str = os.getenv("BING_SEARCH_SUBSCRIPTION_KEY", "")
+    
     # Content directories
     CONTENT_DRAFTS_DIR: str = os.getenv("CONTENT_DRAFTS_DIR", "drafts")
     CONTENT_PUBLISH_KITS_DIR: str = os.getenv("CONTENT_PUBLISH_KITS_DIR", "publish_kits")
