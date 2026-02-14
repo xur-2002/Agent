@@ -506,10 +506,18 @@ def run_article_generate(task: Task) -> TaskResult:
 
     if not keywords:
         elapsed_perf = max(time.perf_counter() - start_perf, 1e-6)
+        metrics = {
+            "successful_articles": [],
+            "failed_articles": [],
+            "skipped_articles": [],
+            "sources_count": 0,
+            "provider": None
+        }
         return TaskResult(
             status="failed",
             summary="No keywords provided",
             error="keywords param is empty",
+            metrics=metrics,
             duration_sec=elapsed_perf
         )
     
@@ -523,8 +531,18 @@ def run_article_generate(task: Task) -> TaskResult:
             try:
                 from agent.content_pipeline.search import get_search_provider
                 search_provider = get_search_provider(Config.SEARCH_PROVIDER)
+                # record which provider was initialized
+                search_provider_used = Config.SEARCH_PROVIDER
             except Exception as e:
-                logger.warning(f"[article_generate] Failed to initialize search provider: {e}")
+                logger.error(f"[article_generate] Failed to initialize search provider: {e}")
+                # track initialization errors for metrics
+                search_errors = [str(e)]
+        else:
+            search_errors = []
+
+        # tracking variables for search results
+        search_provider_used = None if 'search_provider_used' not in locals() else search_provider_used
+        total_sources_count = 0
         
         successful_articles = []
         failed_articles = []
@@ -542,13 +560,26 @@ def run_article_generate(task: Task) -> TaskResult:
                 search_results = []
                 if search_provider:
                     try:
-                        search_results = search_provider.search(keyword, limit=5)
-                        search_results = [
-                            {"title": r.title, "snippet": r.snippet, "link": r.url}
-                            for r in (search_results or [])
-                        ]
+                        sr = search_provider.search(keyword, limit=5)
+                        # Normalize SearchResult objects into simple dicts
+                        search_results = []
+                        for r in (sr or []):
+                            try:
+                                search_results.append({
+                                    "title": getattr(r, 'title', '') or '',
+                                    "url": getattr(r, 'url', '') or getattr(r, 'link', ''),
+                                    "snippet": getattr(r, 'snippet', '') or ''
+                                })
+                            except Exception:
+                                search_results.append({
+                                    "title": str(r),
+                                    "url": '',
+                                    "snippet": ''
+                                })
+                        total_sources_count += len(search_results)
                     except Exception as e:
-                        logger.warning(f"[article_generate] Search failed for '{keyword}': {e}")
+                        logger.error(f"[article_generate] Search failed for '{keyword}': {e}")
+                        search_errors.append(str(e))
                         search_results = []
                 
                 # Build key points from search snippets
@@ -593,7 +624,7 @@ def run_article_generate(task: Task) -> TaskResult:
                     "model": article.get("model", "unknown"),
                     "word_count": article.get("word_count", 0),
                     "file_path": file_path,
-                    "sources_count": article.get("sources_count", 0)
+                    "sources_count": article.get("sources_count", 0) or len(search_results)
                 })
                 logger.info(f"[article_generate] ✅ Generated: {article.get('title', keyword)} ({article.get('word_count', 0)} words, {article.get('provider', '?')})")
                 
@@ -724,6 +755,9 @@ def run_article_generate(task: Task) -> TaskResult:
                 "total_keywords": len(keywords),
                 "elapsed_seconds": elapsed,
                 "provider": provider_used or Config.LLM_PROVIDER,
+                "search_provider_used": search_provider_used,
+                "sources_count": total_sources_count,
+                "search_errors": search_errors,
                 "successful_articles": successful_articles,
                 "failed_articles": failed_articles,
                 "skipped_articles": skipped_articles
@@ -734,10 +768,19 @@ def run_article_generate(task: Task) -> TaskResult:
     except Exception as e:
         logger.error(f"[article_generate] Task execution error: {e}", exc_info=True)
         elapsed_perf = max(time.perf_counter() - start_perf, 1e-6)
+        # Ensure metrics keys exist even on fatal exception
+        metrics = {
+            "successful_articles": globals().get('successful_articles', []) or [],
+            "failed_articles": globals().get('failed_articles', []) or [],
+            "skipped_articles": globals().get('skipped_articles', []) or [],
+            "sources_count": globals().get('total_sources_count', 0) or 0,
+            "provider": globals().get('provider_used', None)
+        }
         return TaskResult(
             status="failed",
             summary="Article generation task failed with critical error",
             error=str(e)[:500],
+            metrics=metrics,
             duration_sec=elapsed_perf
         )
 
