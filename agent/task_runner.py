@@ -504,6 +504,11 @@ def run_article_generate(task: Task) -> TaskResult:
     # Start high-resolution timer for duration measurement
     start_perf = time.perf_counter()
 
+    # Ensure search-related tracking variables are always defined
+    search_errors: list = []
+    search_provider_used = None
+    search_attempted = False
+
     if not keywords:
         elapsed_perf = max(time.perf_counter() - start_perf, 1e-6)
         metrics = {
@@ -511,7 +516,10 @@ def run_article_generate(task: Task) -> TaskResult:
             "failed_articles": [],
             "skipped_articles": [],
             "sources_count": 0,
-            "provider": None
+            "provider": None,
+            "search_provider_used": None,
+            "search_attempted": False,
+            "search_errors": []
         }
         return TaskResult(
             status="failed",
@@ -525,9 +533,12 @@ def run_article_generate(task: Task) -> TaskResult:
     logger.info(f"[article_generate] LLM_PROVIDER={Config.LLM_PROVIDER}")
     
     try:
-        # Try to get search provider, but allow None
+        # Try to get search provider, but allow None. Track attempts and errors.
         search_provider = None
+        total_sources_count = 0
         if Config.SERPER_API_KEY:
+            # We attempted to initialize a search provider
+            search_attempted = True
             try:
                 from agent.content_pipeline.search import get_search_provider
                 search_provider = get_search_provider(Config.SEARCH_PROVIDER)
@@ -536,13 +547,11 @@ def run_article_generate(task: Task) -> TaskResult:
             except Exception as e:
                 logger.error(f"[article_generate] Failed to initialize search provider: {e}")
                 # track initialization errors for metrics
-                search_errors = [str(e)]
+                search_errors.append(str(e))
         else:
-            search_errors = []
-
-        # tracking variables for search results
-        search_provider_used = None if 'search_provider_used' not in locals() else search_provider_used
-        total_sources_count = 0
+            # No API key/config provided — search skipped
+            search_provider = None
+            search_attempted = False
         
         successful_articles = []
         failed_articles = []
@@ -659,7 +668,32 @@ def run_article_generate(task: Task) -> TaskResult:
                 break
                 
             except RateLimitError as e:
-                logger.warning(f"[article_generate] ⚠️ {e.provider} rate limited - marking as failed (retriable)")
+                logger.warning(f"[article_generate] ⚠️ {e.provider} rate limited - attempting fallback generation")
+                try:
+                    # Attempt fallback generation (generate_article_from_material will try providers then template)
+                    fallback_art = generate_article_from_material(
+                        keyword, {'sources': search_results, 'key_points': key_points}, language=params.get("language", "zh-CN")
+                    )
+                    if fallback_art:
+                        file_path = save_article(fallback_art)
+                        if file_path:
+                            successful_articles.append({
+                                "keyword": keyword,
+                                "title": fallback_art.get("title", ""),
+                                "provider": fallback_art.get("provider", "none"),
+                                "model": fallback_art.get("model", "none"),
+                                "word_count": fallback_art.get("word_count", 0),
+                                "file_path": file_path,
+                                "sources_count": fallback_art.get("sources_count", 0) or len(search_results),
+                                "fallback_used": fallback_art.get("fallback_used", True)
+                            })
+                            logger.info(f"[article_generate] ✅ Fallback generated for {keyword}")
+                            # continue to next keyword
+                            continue
+                except Exception as fe:
+                    logger.error(f"[article_generate] Fallback generation also failed for {keyword}: {fe}")
+
+                # If fallback didn't succeed, mark as failed (retriable)
                 failed_articles.append({
                     "keyword": keyword,
                     "reason": f"{e.provider}_rate_limited (retriable)"
@@ -756,6 +790,7 @@ def run_article_generate(task: Task) -> TaskResult:
                 "elapsed_seconds": elapsed,
                 "provider": provider_used or Config.LLM_PROVIDER,
                 "search_provider_used": search_provider_used,
+                "search_attempted": search_attempted,
                 "sources_count": total_sources_count,
                 "search_errors": search_errors,
                 "successful_articles": successful_articles,
@@ -774,7 +809,10 @@ def run_article_generate(task: Task) -> TaskResult:
             "failed_articles": globals().get('failed_articles', []) or [],
             "skipped_articles": globals().get('skipped_articles', []) or [],
             "sources_count": globals().get('total_sources_count', 0) or 0,
-            "provider": globals().get('provider_used', None)
+            "provider": globals().get('provider_used', None),
+            "search_provider_used": globals().get('search_provider_used', None),
+            "search_attempted": globals().get('search_attempted', False),
+            "search_errors": globals().get('search_errors', []) or []
         }
         return TaskResult(
             status="failed",
