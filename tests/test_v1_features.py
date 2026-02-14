@@ -288,5 +288,43 @@ class TestDailyContentBatch:
                         pass
 
 
+class TestImportIntegrity:
+    """Test: Verify all modules import without NameError or other issues.
+    
+    This regression test ensures that all required modules can be imported
+    without NameError (e.g., 'Path' not defined) or other import-time failures.
+    """
+
+    def test_task_runner_imports_without_errors(self):
+        """Test that task_runner module imports successfully (no NameError on Path)."""
+        try:
+            import agent.task_runner as tr
+            # Verify the module has expected functions
+            assert hasattr(tr, 'run_daily_content_batch')
+            assert hasattr(tr, '_send_feishu_summary')
+            assert hasattr(tr, '_send_email_summary')
+        except NameError as e:
+            pytest.fail(f"task_runner import failed with NameError: {e}")
+        except Exception as e:
+            pytest.fail(f"task_runner import failed unexpectedly: {e}")
+
+    def test_all_v1_modules_import(self):
+        """Test that all V1 feature modules import without errors."""
+        modules_to_test = [
+            'agent.config',
+            'agent.trends',
+            'agent.article_generator',
+            'agent.image_provider',
+            'agent.email_sender',
+            'agent.task_runner',
+        ]
+        
+        for module_name in modules_to_test:
+            try:
+                __import__(module_name)
+            except Exception as e:
+                pytest.fail(f"Module {module_name} failed to import: {e}")
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

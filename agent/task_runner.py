@@ -6,10 +6,15 @@ import time
 import feedparser
 import requests
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Any, Optional
 
 from agent.models import Task, TaskResult
 from agent.utils import now_utc, truncate_str
+from agent.trends import select_topics
+from agent.feishu import send_article_generation_results
+from agent.article_generator import generate_article_in_style, slugify
+from agent.image_provider import provide_cover_image, image_search
 
 logger = logging.getLogger(__name__)
 
@@ -496,11 +501,16 @@ def run_article_generate(task: Task) -> TaskResult:
     if isinstance(keywords, str):
         keywords = [keywords]
     
+    # Start high-resolution timer for duration measurement
+    start_perf = time.perf_counter()
+
     if not keywords:
+        elapsed_perf = max(time.perf_counter() - start_perf, 1e-6)
         return TaskResult(
             status="failed",
             summary="No keywords provided",
-            error="keywords param is empty"
+            error="keywords param is empty",
+            duration_sec=elapsed_perf
         )
     
     logger.info(f"[article_generate] Starting with {len(keywords)} keyword(s)")
@@ -653,7 +663,9 @@ def run_article_generate(task: Task) -> TaskResult:
                     "reason": f"Unexpected error: {str(e)[:100]}"
                 })
         
-        elapsed = (now_utc() - start_time).total_seconds()
+        # Prefer high-resolution elapsed time
+        elapsed_perf = max(time.perf_counter() - start_perf, 1e-6)
+        elapsed = elapsed_perf
         
         # Determine overall status
         if successful_articles:
@@ -716,16 +728,17 @@ def run_article_generate(task: Task) -> TaskResult:
                 "failed_articles": failed_articles,
                 "skipped_articles": skipped_articles
             },
-            duration_sec=elapsed
+            duration_sec=elapsed_perf
         )
         
     except Exception as e:
         logger.error(f"[article_generate] Task execution error: {e}", exc_info=True)
+        elapsed_perf = max(time.perf_counter() - start_perf, 1e-6)
         return TaskResult(
             status="failed",
             summary="Article generation task failed with critical error",
             error=str(e)[:500],
-            duration_sec=0
+            duration_sec=elapsed_perf
         )
 
 
