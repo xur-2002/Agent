@@ -21,28 +21,28 @@ logger = logging.getLogger(__name__)
 
 def run_task_with_retry(task: Task, retry_count: int = 2, backoff_times: list = None) -> TaskResult:
     """Execute a task with retry logic and exponential backoff.
-    
+
     Args:
         task: Task to execute.
         retry_count: Number of retries (default 2).
         backoff_times: List of backoff seconds for each retry (default [1, 3, 7]).
-    
+
     Returns:
         TaskResult with status, summary, and optional error.
     """
     if backoff_times is None:
         backoff_times = [1, 3, 7]
-    
+
     attempt = 0
     last_error = None
     last_result = None
-    
+
     while attempt <= retry_count:
         try:
             logger.debug(f"[{task.id}] Attempt {attempt + 1}/{retry_count + 1}")
             result = run_task(task)
             last_result = result
-            
+
             if result.status == "success":
                 logger.info(f"[{task.id}] Task succeeded on attempt {attempt + 1}")
                 return result
@@ -52,7 +52,7 @@ def run_task_with_retry(task: Task, retry_count: int = 2, backoff_times: list = 
                     wait_time = backoff_times[attempt] if attempt < len(backoff_times) else backoff_times[-1]
                     logger.info(f"[{task.id}] Task failed, retrying in {wait_time}s...")
                     time.sleep(wait_time)
-        
+
         except Exception as e:
             last_error = str(e)
             if attempt < retry_count:
@@ -63,7 +63,7 @@ def run_task_with_retry(task: Task, retry_count: int = 2, backoff_times: list = 
                 logger.error(f"[{task.id}] Task failed after {retry_count + 1} attempts: {e}")
         
         attempt += 1
-    
+
     # All retries exhausted - return last result or failed
     if last_result:
         return last_result
@@ -1342,4 +1342,3 @@ def _send_email_summary(successful: list, failed: list, today: str, email_to: st
     )
 
     logger.info(f"Email send result: {result.get('status')} - {result.get('reason', '')}")
-
