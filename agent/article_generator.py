@@ -543,3 +543,136 @@ def generate_article_from_material(keyword: str, material_pack: Dict[str, Any], 
         'sources_count': len(sources),
         'fallback_used': True
     }
+
+
+def generate_article_in_style(
+    keyword: str,
+    material_pack: Dict[str, Any],
+    style: str = 'wechat',
+    word_count_range: tuple = (800, 1200),
+    language: str = 'zh-CN'
+) -> Dict[str, Any]:
+    """Generate article in specific style (wechat or xiaohongshu).
+    
+    Args:
+        keyword: Topic/keyword
+        material_pack: {'sources': [...], 'key_points': [...]}
+        style: 'wechat' (800-1200 words) or 'xiaohongshu' (300-600 words, casual)
+        word_count_range: (min_words, max_words) tuple
+        language: zh-CN or en-US
+        
+    Returns:
+        Dict with article content and metadata
+    """
+    from agent.config import Config
+    search_results = material_pack.get('sources', [])
+    
+    min_words, max_words = word_count_range
+    
+    # Build style-specific prompt
+    providers = []
+    if getattr(Config, 'LLM_PROVIDER', None):
+        providers.append(Config.LLM_PROVIDER)
+    if Config.OPENAI_API_KEY and 'openai' not in providers:
+        providers.append('openai')
+    
+    if language == 'zh-CN':
+        if style == 'wechat':
+            style_desc = f"公众号类型的文章，结构完整（标题、导语、分段、小结/金句），{min_words}-{max_words}字"
+            style_prompt = """输出格式：
+# [文章标题]
+
+## 导语
+
+[导语，100-150字]
+
+## 正文
+
+[分段正文，800-1000字]
+
+## 金句/小结
+
+[金句或小结，80-120字]"""
+        else:  # xiaohongshu
+            style_desc = f"小红书笔记类型，口语风格、种草/经验帖结构，{min_words}-{max_words}字，最后有互动引导"
+            style_prompt = """输出格式：
+# [吸引眼球的标题/主题]
+
+[开场/背景，30-50字]
+
+## 📌 核心要点
+
+- [要点1，20-40字]
+- [要点2，20-40字]
+- [要点3，20-40字]
+
+## 💡 个人建议
+
+[实用建议或体验分享，100-150字]
+
+## ❓ 你怎么看？
+
+[互动引导，20-40字]"""
+        
+        sources_text = ""
+        for i, s in enumerate(search_results[:3], 1):
+            title = s.get('title', '')
+            snippet = s.get('snippet', '')
+            link = s.get('link', '')
+            sources_text += f"{i}. [{title}]({link})\n   {snippet}\n\n"
+        
+        if sources_text:
+            prompt = f"为关键词 \"{keyword}\" 写一篇{style_desc}。\n\n搜索结果参考：\n{sources_text}\n\n要求：\n1. 基于搜索结果的信息\n2. 语言生动自然\n3. 使用 Markdown 格式\n{style_prompt}"
+        else:
+            prompt = f"为关键词 \"{keyword}\" 写一篇{style_desc}。\n\n要求：\n1. 基于常见知识\n2. 语言生动自然\n3. 使用 Markdown 格式\n{style_prompt}"
+    else:  # English
+        if style == 'wechat':
+            style_desc = f"Professional blog post, {min_words}-{max_words} words"
+        else:
+            style_desc = f"Casual social media post, {min_words}-{max_words} words, informal tone"
+        prompt = f"Write a {style_desc} about \"{keyword}\".\n\nRequirements:\n1. Use Markdown format\n2. Professional and engaging\n\n# [Title]\n\n## Introduction\n\n[content]\n\n## Body\n\n[content]"
+    
+    # Try providers
+    for p in providers:
+        try:
+            logger.debug(f"Generating {style} article for '{keyword}' using provider {p}")
+            art = generate_article(keyword=keyword, search_results=search_results, dry_run=(p=='dry_run'), language=language, provider=p)
+            if art:
+                art['fallback_used'] = False
+                art['style'] = style
+                return art
+        except Exception as e:
+            logger.warning(f"Provider {p} failed for {style} article '{keyword}': {e}")
+            continue
+    
+    # Fallback template
+    if style == 'xiaohongshu':
+        body = f"# {keyword}\n\n{keyword} 是当下的热话题。\n\n## 📌 核心要点\n\n"
+        key_points = material_pack.get('key_points', [])
+        for kp in (key_points[:3] if key_points else [f"关于{keyword}的新信息", f"{keyword}的现状分析"]):
+            body += f"- {kp}\n"
+        body += f"\n## 💡 个人观点\n\n关于{keyword}，这是一个值得关注的话题。\n\n## ❓ 你怎么看？\n\n欢迎分享你的看法！"
+    else:  # wechat
+        title = f"{keyword} — 详解"
+        key_points = material_pack.get('key_points') or []
+        body = f"# {title}\n\n## 导语\n\n{keyword} 是当前的热门话题，我们来深度解读一下。\n\n## 正文\n\n"
+        if key_points:
+            for kp in key_points[:6]:
+                body += f"- {kp}\n"
+        else:
+            body += f"关于{keyword}的详细分析内容。\n"
+        body += f"\n## 总结\n\n{keyword}的重要意义和发展趋势。"
+    
+    return {
+        'title': keyword,
+        'body': body,
+        'keyword': keyword,
+        'sources': [{'title': s.get('title',''), 'link': s.get('link','')} for s in search_results],
+        'provider': 'none',
+        'model': 'none',
+        'style': style,
+        'word_count': len(body.split()),
+        'sources_count': len(search_results),
+        'fallback_used': True
+    }
+

@@ -104,6 +104,8 @@ def run_task(task: Task) -> TaskResult:
             result = run_keyword_trend_watch(task)
         elif task_id == "article_generate":
             result = run_article_generate(task)
+        elif task_id == "daily_content_batch":
+            result = run_daily_content_batch(task)
         elif task_id == "publish_kit_build":
             result = run_publish_kit_build(task)
         else:
@@ -760,36 +762,41 @@ def run_publish_kit_build(task: Task) -> TaskResult:
 
 
 def run_daily_content_batch(task: Task) -> TaskResult:
-    """Daily content batch: trends -> materials -> article -> image -> save -> email/feishu summary
+    """Daily content batch V1: topics -> dual versions -> images -> metadata -> Feishu/email
+
+    Generates two versions of each article:
+    - wechat.md: 800-1200 chars, structured (title, intro, body, conclusion)
+    - xiaohongshu.md: 300-600 chars, casual (hook, points, suggestion, engagement)
+
+    Images: Priority search -> download -> fallback placeholder
 
     Params (in task.params):
-        daily_quota: int
-        seed_keywords: list
-        geo: str
-        cooldown_days: int
-        style: str
-        email_to: str
-        attach_markdown: bool
+        daily_quota: Number of topics (overridable by TOP_N env var)
+        seed_keywords: Fallback keywords list
+        geo: Geographic region for trends (default US)
+        cooldown_days: Skip recently generated topics
+        email_to: Recipient email
+        attach_markdown: Include files in email
     """
     from agent.trends import select_topics
-    from agent.article_generator import generate_article_from_material, slugify
-    from agent.image_provider import provide_cover_image
+    from agent.article_generator import generate_article_in_style, slugify
+    from agent.image_provider import provide_cover_image, image_search
     from agent.email_sender import send_daily_summary
     from agent.feishu import send_article_generation_results
     from agent.storage import get_storage
     import json
     from pathlib import Path
+    from datetime import datetime
 
     params = task.params or {}
-    daily_quota = int(params.get('daily_quota', params.get('daily_count', 3)))
-    seed_keywords = params.get('seed_keywords') or []
-    geo = params.get('geo', params.get('TRENDS_GEO', 'US'))
+    daily_quota = int(params.get('daily_quota', 3))
+    seed_keywords = params.get('seed_keywords') or ['AI', 'Cloud Computing', 'Web Development']
+    geo = params.get('geo', 'US')
     cooldown_days = int(params.get('cooldown_days', 3))
-    style = params.get('style', 'wechat_general')
     email_to = params.get('email_to', 'xu.r@wustl.edu')
     attach_markdown = bool(params.get('attach_markdown', True))
 
-    # Load state recent topics if available
+    # Load state
     storage = get_storage()
     recent_topics = []
     try:
@@ -800,10 +807,11 @@ def run_daily_content_batch(task: Task) -> TaskResult:
             batch_state = raw.get(task.id, {}) or {}
             recent_topics = batch_state.get('recent_topics', [])
     except Exception:
-        recent_topics = []
+        pass
 
     state_for_trends = {'recent_topics': recent_topics}
 
+    # Step 1: Select topics (uses TOP_N env var if set)
     topics = select_topics(seed_keywords=seed_keywords, daily_quota=daily_quota, geo=geo, cooldown_days=cooldown_days, state=state_for_trends)
 
     today = datetime.utcnow().strftime('%Y-%m-%d')
@@ -817,13 +825,15 @@ def run_daily_content_batch(task: Task) -> TaskResult:
     start_time = now_utc()
 
     for t in topics:
-        topic = t.get('topic')
+        topic = t.get('topic', '').strip()
         if not topic:
             continue
+
         try:
-            # Build material pack
-            material_pack = {'sources': [], 'key_points': []}
-            # Try using Serper search if available
+            # Step 2: Build material pack
+            material_pack = {'topic': topic, 'sources': [], 'key_points': []}
+
+            # Try Serper search
             try:
                 from agent.content_pipeline.search import get_search_provider
                 from agent.config import Config
@@ -832,114 +842,264 @@ def run_daily_content_batch(task: Task) -> TaskResult:
                     sr = sp.search(topic, limit=5)
                     sources = []
                     for r in (sr or []):
-                        sources.append({'title': getattr(r, 'title', ''), 'link': getattr(r, 'url', ''), 'snippet': getattr(r, 'snippet', ''), 'image': getattr(r, 'image', None)})
+                        sources.append({
+                            'title': getattr(r, 'title', ''),
+                            'link': getattr(r, 'url', ''),
+                            'snippet': getattr(r, 'snippet', ''),
+                        })
                     material_pack['sources'] = sources
-                    # key_points: extract first sentences from snippets
+                    # Extract key points from snippets
                     kps = []
                     for s in sources:
-                        sn = s.get('snippet') or ''
-                        if sn:
-                            kps.append(sn.split('. ')[0])
+                        snippet = s.get('snippet', '').strip()
+                        if snippet:
+                            kps.append(snippet.split('. ')[0])
                     material_pack['key_points'] = kps[:6]
             except Exception as e:
-                logger.warning(f"Material search failed for '{topic}': {e}")
+                logger.warning(f"Search failed for '{topic}': {e}")
 
-            # Generate article (LLM or fallback)
-            art = generate_article_from_material(topic, material_pack)
+            # Step 3: Create topic output directory
+            slug = slugify(topic)
+            topic_dir = base_output / slug
+            topic_dir.mkdir(parents=True, exist_ok=True)
 
-            # Prepare per-topic output dir
-            slug = slugify(art.get('title') or topic)
-            article_dir = base_output / slug
-            article_dir.mkdir(parents=True, exist_ok=True)
+            # Step 4: Generate two versions
+            wechat_article = generate_article_in_style(
+                topic,
+                material_pack,
+                style='wechat',
+                word_count_range=(800, 1200)
+            )
 
-            # Save markdown and meta (per V1 spec)
-            md_path = article_dir / 'article.md'
-            with open(md_path, 'w', encoding='utf-8') as f:
-                f.write(art.get('body', ''))
+            xiaohongshu_article = generate_article_in_style(
+                topic,
+                material_pack,
+                style='xiaohongshu',
+                word_count_range=(300, 600)
+            )
 
-            meta = {
-                'title': art.get('title'),
-                'summary': (art.get('body') or '')[:300],
+            # Save both versions
+            wechat_path = topic_dir / 'wechat.md'
+            xiaohongshu_path = topic_dir / 'xiaohongshu.md'
+
+            with open(wechat_path, 'w', encoding='utf-8') as f:
+                f.write(wechat_article.get('body', ''))
+
+            with open(xiaohongshu_path, 'w', encoding='utf-8') as f:
+                f.write(xiaohongshu_article.get('body', ''))
+
+            logger.info(f"Generated both versions for '{topic}'")
+
+            # Step 5: Get cover image (search -> download -> fallback)
+            img_info = provide_cover_image(material_pack, str(base_output), slug)
+
+            # Step 6: Build metadata
+            metadata = {
+                'topic': topic,
                 'slug': slug,
-                'keyword': art.get('keyword'),
-                'provider': art.get('provider') or 'none',
-                'fallback_used': art.get('fallback_used', False),
-                'sources_count': art.get('sources_count', 0),
-                'file_path': str(md_path),
-                'word_count': art.get('word_count', 0),
-                'created_at': datetime.utcnow().isoformat()
+                'date_created': datetime.utcnow().isoformat(),
+                'versions': {
+                    'wechat': {
+                        'file': str(wechat_path),
+                        'word_count': wechat_article.get('word_count', 0),
+                        'provider': wechat_article.get('provider', 'none'),
+                        'fallback_used': wechat_article.get('fallback_used', False)
+                    },
+                    'xiaohongshu': {
+                        'file': str(xiaohongshu_path),
+                        'word_count': xiaohongshu_article.get('word_count', 0),
+                        'provider': xiaohongshu_article.get('provider', 'none'),
+                        'fallback_used': xiaohongshu_article.get('fallback_used', False)
+                    }
+                },
+                'sources': material_pack.get('sources', []),
+                'image': {
+                    'status': img_info.get('image_status'),
+                    'path': img_info.get('image_path'),
+                    'relpath': img_info.get('image_relpath'),
+                    'source_url': img_info.get('source_url'),
+                    'site_name': img_info.get('site_name'),
+                    'license_note': img_info.get('license_note'),
+                    'reason': img_info.get('reason') if img_info.get('image_status') != 'ok' else None
+                }
             }
-            meta_path = article_dir / 'meta.json'
+
+            # Save metadata
+            meta_path = topic_dir / 'metadata.json'
             with open(meta_path, 'w', encoding='utf-8') as f:
-                json.dump(meta, f, ensure_ascii=False, indent=2)
+                json.dump(metadata, f, ensure_ascii=False, indent=2)
 
-            # Try to fetch/download image
-            img_info = provide_cover_image({'sources': material_pack.get('sources', [])}, str(base_output), slug)
-            if img_info.get('image_status') == 'ok':
-                meta['image_status'] = 'ok'
-                meta['image_path'] = img_info.get('image_path')
-            else:
-                meta['image_status'] = 'skipped'
-                meta['image_reason'] = img_info.get('reason')
-
-            # append successful
-            successful.append({**meta, 'file_path': str(md_path)})
+            # Add to successful list
+            successful.append(metadata)
+            logger.info(f"Successfully processed topic: {topic}")
 
         except Exception as e:
             logger.error(f"Failed to process topic '{topic}': {e}")
-            failed.append({'keyword': topic, 'reason': str(e)})
-            continue
+            failed.append({'topic': topic, 'reason': str(e)})
 
     elapsed = (now_utc() - start_time).total_seconds()
 
-    # Determine overall status
-    if successful:
-        status = 'success'
-    elif skipped and not successful and not failed:
-        status = 'skipped'
-    else:
-        status = 'failed'
+    # Determine status
+    status = 'success' if successful else ('skipped' if not failed else 'failed')
 
-    # Write index.json
+    # Write daily index
     index = {
         'date': today,
         'generated_count': len(successful),
         'failed_count': len(failed),
-        'skipped_count': len(skipped),
-        'articles': successful,
+        'topics': successful,
         'duration_sec': elapsed
     }
     with open(base_output / 'index.json', 'w', encoding='utf-8') as f:
         json.dump(index, f, ensure_ascii=False, indent=2)
 
-    # Send Feishu summary (non-blocking)
+    # Step 7: Send Feishu card (non-blocking)
     try:
-        send_article_generation_results(successful_articles=successful, failed_articles=failed, skipped_articles=skipped, total_time=elapsed, provider='', run_id='')
+        _send_feishu_summary(successful, failed, elapsed)
     except Exception as e:
         logger.warning(f"Failed to send Feishu summary: {e}")
 
-    # Send email summary (skip if SMTP not configured)
+    # Step 8: Send email (non-blocking, skip if SMTP not configured)
     try:
-        html = f"<h2>Daily Content Batch - {today}</h2><ul>"
-        attachments = []
-        for a in successful:
-            html += f"<li><b>{a.get('title')}</b><br/>{a.get('summary')}<br/>File: {a.get('file_path')}</li>"
-            if attach_markdown:
-                attachments.append(a.get('file_path'))
-        html += "</ul>"
-        email_res = send_daily_summary(subject=f"Daily Content Batch - {today}", body_html=html, attachments=attachments if attach_markdown else None, to_addr=email_to)
+        _send_email_summary(successful, failed, today, email_to, attach_markdown, topic_dir)
     except Exception as e:
-        logger.warning(f"Email send failed/skipped: {e}")
+        logger.warning(f"Email send skipped/failed: {e}")
 
     return TaskResult(
         status=status,
-        summary=f"Generated {len(successful)} articles, {len(failed)} failed, {len(skipped)} skipped",
+        summary=f"Generated {len(successful)} topics (wechat+xiaohongshu), {len(failed)} failed, time: {elapsed:.1f}s",
         metrics={
             'generated_count': len(successful),
             'failed_count': len(failed),
-            'skipped_count': len(skipped),
-            'articles': successful,
+            'topics': successful,
             'duration_sec': elapsed
         },
         duration_sec=elapsed
     )
+
+
+def _send_feishu_summary(successful: list, failed: list, elapsed: float) -> None:
+    """Send simplified Feishu summary with article content.
+    
+    For each topic, include copyable content and image/source links.
+    """
+    from agent.config import Config
+    import requests
+
+    webhook_url = Config.FEISHU_WEBHOOK_URL
+    if not webhook_url:
+        logger.warning("FEISHU_WEBHOOK_URL not configured, skipping Feishu notification")
+        return
+
+    # Build card with all articles
+    elements = []
+
+    if successful:
+        elements.append({"tag": "markdown", "content": f"✅ **Daily Content Batch - {len(successful)} Topics Generated**"})
+
+        for item in successful[:5]:  # Limit to 5 to avoid card size issues
+            topic = item.get('topic', 'Unknown')
+            elements.append({"tag": "hr"})
+            elements.append({"tag": "markdown", "content": f"## {topic}"})
+
+            # WeChat version
+            wechat_file = item.get('versions', {}).get('wechat', {}).get('file', '')
+            if wechat_file:
+                elements.append({"tag": "markdown", "content": "**📱 WeChat Version:**\n[Read](file://" + wechat_file + ")"})
+
+            # Xiaohongshu version
+            xhs_file = item.get('versions', {}).get('xiaohongshu', {}).get('file', '')
+            if xhs_file:
+                elements.append({"tag": "markdown", "content": "**🎀 Xiaohongshu Version:**\n[Read](file://" + xhs_file + ")"})
+
+            # Image and source
+            img_info = item.get('image', {})
+            if img_info.get('status') == 'ok':
+                source_url = img_info.get('source_url', '')
+                site_name = img_info.get('site_name', '')
+                license = img_info.get('license_note', '')
+                img_text = f"🖼️ Image from **{site_name}**\n{license}"
+                if source_url:
+                    img_text += f"\n[View Source]({source_url})"
+                elements.append({"tag": "markdown", "content": img_text})
+            else:
+                reason = img_info.get('reason', 'unavailable')
+                elements.append({"tag": "markdown", "content": f"📭 No image available ({reason})"})
+
+    if failed:
+        elements.append({"tag": "hr"})
+        elements.append({"tag": "markdown", "content": f"❌ **{len(failed)} Failed Topics:**"})
+        for item in failed[:3]:
+            elements.append({"tag": "markdown", "content": f"- {item.get('topic', 'Unknown')}: {item.get('reason', 'Unknown error')[:80]}"})
+
+    elements.append({"tag": "hr"})
+    elements.append({"tag": "markdown", "content": f"⏱️ Total time: {elapsed:.1f}s"})
+
+    payload = {
+        "msg_type": "interactive",
+        "card": {"elements": elements}
+    }
+
+    try:
+        response = requests.post(webhook_url, json=payload, timeout=20)
+        response.raise_for_status()
+        logger.info(f"Feishu summary sent (status: {response.status_code})")
+    except Exception as e:
+        logger.error(f"Failed to send Feishu card: {e}")
+
+
+def _send_email_summary(successful: list, failed: list, today: str, email_to: str, attach_files: bool, topic_dir: Path) -> None:
+    """Send email with article summaries and optional file attachments."""
+    from agent.email_sender import send_daily_summary
+
+    if not successful:
+        logger.info("No articles to send via email")
+        return
+
+    # Build HTML content
+    html = f"<h2>Daily Content Batch - {today}</h2>\n<p>{len(successful)} topics generated</p>\n"
+
+    attachments = []
+
+    for item in successful[:10]:
+        topic = item.get('topic', 'Unknown')
+        wechat_file = item.get('versions', {}).get('wechat', {}).get('file', '')
+        xhs_file = item.get('versions', {}).get('xiaohongshu', {}).get('file', '')
+
+        html += f"<hr/><h3>{topic}</h3>\n"
+        html += f"<p><b>📱 WeChat Version:</b></p>\n"
+        html += f"<p><a href='file://{wechat_file}'>View WeChat Article</a></p>\n"
+        html += f"<p><b>🎀 Xiaohongshu Version:</b></p>\n"
+        html += f"<p><a href='file://{xhs_file}'>View Xiaohongshu Article</a></p>\n"
+
+        img_info = item.get('image', {})
+        if img_info.get('status') == 'ok':
+            source_url = img_info.get('source_url', '')
+            license_note = img_info.get('license_note', '')
+            html += f"<p><b>Image Source:</b> {license_note}"
+            if source_url:
+                html += f" <a href='{source_url}'>View</a>"
+            html += "</p>\n"
+
+        # Add files to attachment list
+        if attach_files:
+            if wechat_file and Path(wechat_file).exists():
+                attachments.append(wechat_file)
+            if xhs_file and Path(xhs_file).exists():
+                attachments.append(xhs_file)
+
+    if failed:
+        html += f"<hr/><h3>Failed Topics ({len(failed)})</h3>\n"
+        for item in failed:
+            html += f"<p>❌ {item.get('topic', 'Unknown')}: {item.get('reason', 'Unknown error')}</p>\n"
+
+    # Send email (will skip if SMTP not configured)
+    result = send_daily_summary(
+        subject=f"Daily Content Batch - {today}",
+        body_html=html,
+        attachments=attachments if attach_files else None,
+        to_addr=email_to
+    )
+
+    logger.info(f"Email send result: {result.get('status')} - {result.get('reason', '')}")
+

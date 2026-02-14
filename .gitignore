@@ -41,4 +41,10 @@ ENV/
 *.tmp
 
 state.json
+outputs/
+drafts/
+publish_kits/
+test_image_debug.py
+verify_image_logic.py
+create_placeholder.py
 
