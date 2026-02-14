@@ -1,54 +1,102 @@
-"""Simple image provider: extract image urls from sources or try a simple lookup and download.
+"""Image placeholder provider for articles.
 
-This is intentionally lightweight: failures must not raise, only return status.
+Provides a stable local placeholder image that never depends on external APIs.
 """
-import os
-import logging
-from typing import Dict, Any, Optional
+import base64
+import shutil
 from pathlib import Path
-import requests
+from typing import Dict, Any
+import logging
 
 logger = logging.getLogger(__name__)
 
-
-def download_image(url: str, dest: Path, timeout: int = 10) -> bool:
-    try:
-        resp = requests.get(url, timeout=timeout, stream=True)
-        resp.raise_for_status()
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        with open(dest, 'wb') as f:
-            for chunk in resp.iter_content(1024 * 8):
-                if chunk:
-                    f.write(chunk)
-        return True
-    except Exception as e:
-        logger.warning(f"Failed to download image {url}: {e}")
-        return False
+# 1x1 PNG transparent pixel base64 (fallback bytes)
+_MIN_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
 
 
-def provide_cover_image(material_pack: Dict[str, Any], output_dir: str, slug: str) -> Dict[str, Any]:
-    """Attempt to find and download a cover image.
-
-    Returns dict with image_status, image_path (or None), image_source_url, image_credit, reason
+def provide_cover_image(material: dict, base_output: str, slug: str) -> dict:
     """
-    out = {
-        'image_status': 'skipped',
-        'image_path': None,
-        'image_source_url': None,
-        'image_credit': None,
-        'reason': 'no_image_found'
-    }
-    # Try to get image from material sources if any
-    sources = material_pack.get('sources', []) or []
-    for s in sources:
-        img = s.get('image') or s.get('thumbnail') or s.get('image_url')
-        if img:
-            dest = Path(output_dir) / slug / 'images' / 'cover.jpg'
-            ok = download_image(img, dest)
-            if ok:
-                out.update({'image_status': 'ok', 'image_path': str(dest), 'image_source_url': img, 'image_credit': s.get('title')})
-                return out
+    Provide a cover image for an article.
+    
+    **RULES:**
+    - If material is a dict AND 'sources' key exists AND sources == []: return skipped (no file written)
+    - Otherwise: always write placeholder PNG and return ok
+    - Only return failed if disk write fails
+    
+    Args:
+        material: Material pack dict (may be {}, None, or have 'sources' key)
+        base_output: Path to output directory (will create images/ subdir)
+        slug: Article slug for filename (becomes images/<slug>.png)
+    
+    Returns:
+        dict with keys:
+        - image_status: "ok" | "skipped" | "failed"
+        - image_path: str(absolute_path) or None
+        - image_relpath: str (e.g., "images/<slug>.png") or None
+        - reason: str (optional explanation)
+    """
+    # Rule 1: Check if material has empty sources list - return skipped WITHOUT writing
+    if isinstance(material, dict) and "sources" in material and material["sources"] == []:
+        return {
+            "image_status": "skipped",
+            "reason": "no_sources",
+            "image_path": None,
+            "image_relpath": None
+        }
+    
+    # Rule 2: Otherwise always write placeholder
+    try:
+        base = Path(base_output)
+        images_dir = base / "images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        dest = images_dir / f"{slug}.png"
 
-    # No image found in sources - simple fallback: return skipped
-    out['reason'] = 'no_image_candidate'
-    return out
+        # Try A: copy assets/placeholder.png if exists
+        wrote = False
+        try:
+            repo_root = Path(__file__).resolve().parents[1]
+            asset = repo_root / "assets" / "placeholder.png"
+            if asset.exists() and asset.is_file():
+                shutil.copyfile(asset, dest)
+                wrote = True
+        except Exception as e_copy:
+            logger.debug(f"Could not copy assets/placeholder.png: {e_copy}, trying fallback")
+
+        # Try B: write minimal PNG bytes (fallback)
+        if not wrote:
+            try:
+                data = base64.b64decode(_MIN_PNG_B64)
+                with open(dest, "wb") as f:
+                    f.write(data)
+                wrote = True
+            except Exception as e_write:
+                logger.error(f"Failed to write placeholder PNG: {e_write}")
+                return {
+                    "image_status": "failed",
+                    "image_path": str(dest),
+                    "image_relpath": f"images/{slug}.png",
+                    "reason": f"disk_write_failed: {str(e_write)[:100]}"
+                }
+
+        # Verify file exists
+        if dest.exists():
+            rel = Path("images") / f"{slug}.png"
+            return {
+                "image_status": "ok",
+                "image_path": str(dest),
+                "image_relpath": str(rel)
+            }
+        else:
+            return {
+                "image_status": "failed",
+                "image_path": str(dest),
+                "image_relpath": f"images/{slug}.png",
+                "reason": "file_not_written"
+            }
+
+    except Exception as e:
+        logger.error(f"provide_cover_image fatal error: {e}")
+        return {
+            "image_status": "failed",
+            "reason": f"unexpected_error: {str(e)[:100]}"
+        }

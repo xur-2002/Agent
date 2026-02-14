@@ -104,6 +104,8 @@ def run_task(task: Task) -> TaskResult:
             result = run_keyword_trend_watch(task)
         elif task_id == "article_generate":
             result = run_article_generate(task)
+        elif task_id == "daily_content_batch":
+            result = run_daily_content_batch(task)
         elif task_id == "publish_kit_build":
             result = run_publish_kit_build(task)
         else:

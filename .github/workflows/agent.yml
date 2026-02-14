@@ -59,22 +59,12 @@ jobs:
           # Run agent; do not let non-zero exit fail the job to keep workflow green
           python -m agent.main 2>&1 | tee run-log.txt || true
       
-      - name: Commit and push changes (state + articles)
+      - name: Summary
         if: always()
         run: |
-          git config --local user.email "agent@github.com"
-          git config --local user.name "Agent Workflow"
-          # Try to add and commit state.json if it exists
-          if [[ -f state.json ]]; then
-            git add state.json
-          fi
-          # Also commit any newly generated articles
-          if [[ -d outputs/articles ]]; then
-            git add outputs/articles/ || true
-          fi
-          # Commit if there are changes
-          git commit -m "chore: update agent state and articles" || true
-          git push -u origin main || true
+          echo "✅ Workflow complete"
+          echo "📊 Generated artifacts are uploaded for retrieval"
+          echo "🔒 state.json and outputs/ are in .gitignore (not committed)"
       
       - name: Upload run logs
         if: always()
