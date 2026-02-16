@@ -6,13 +6,94 @@ import logging
 import os
 import random
 import re
+import time
 from typing import Any, Dict, List, Optional
 
-from agent.content_pipeline import search as search_module
+import requests
 
-SearchResult = search_module.SearchResult
+from agent.content_pipeline.search import SearchResult
+
+try:
+    from agent.content_pipeline.search import search_sources_with_meta  # type: ignore
+except Exception:
+    search_sources_with_meta = None  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+
+SERPER_URL = "https://google.serper.dev/search"
+
+
+def _truncate(text: str, limit: int = 300) -> str:
+    raw = str(text or "")
+    if len(raw) <= limit:
+        return raw
+    return raw[:limit]
+
+
+def _serper_search(query: str, num: int = 8) -> Dict[str, Any]:
+    api_key = (os.getenv("SERPER_API_KEY") or "").strip()
+    if not api_key:
+        return {"ok": False, "status": None, "error": "SERPER_API_KEY missing", "data": None}
+
+    headers = {
+        "X-API-KEY": api_key,
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "q": str(query or "").strip(),
+        "gl": "cn",
+        "hl": "zh-CN",
+        "num": int(num),
+    }
+
+    max_attempts = 3
+    last_status: Optional[int] = None
+    last_error = ""
+
+    for attempt in range(max_attempts):
+        try:
+            response = requests.post(SERPER_URL, headers=headers, json=payload, timeout=15)
+        except requests.RequestException as exc:
+            last_error = str(exc)
+            if attempt < max_attempts - 1:
+                sleep_s = (2 ** attempt) * 0.6 + random.uniform(0.0, 0.35)
+                time.sleep(sleep_s)
+                continue
+            return {"ok": False, "status": None, "error": last_error, "data": None}
+
+        status = int(response.status_code)
+        last_status = status
+        body = _truncate(response.text or "")
+
+        if 200 <= status < 300:
+            try:
+                return {"ok": True, "status": status, "error": None, "data": response.json()}
+            except Exception as exc:
+                return {"ok": False, "status": status, "error": f"invalid_json:{exc}; body={body}", "data": None}
+
+        if status == 400:
+            return {"ok": False, "status": status, "error": f"serper_400 body={body}", "data": None}
+
+        if status in {401, 403, 429, 500, 502, 503, 504}:
+            if attempt < max_attempts - 1 and status in {429, 500, 502, 503, 504}:
+                sleep_s = (2 ** attempt) * 0.7 + random.uniform(0.0, 0.35)
+                time.sleep(sleep_s)
+                continue
+            return {"ok": False, "status": status, "error": f"serper_http_{status} body={body}", "data": None}
+
+        return {"ok": False, "status": status, "error": f"serper_http_{status} body={body}", "data": None}
+
+    return {"ok": False, "status": last_status, "error": last_error or "serper_unknown_error", "data": None}
+
+
+def serper_self_check(query: str) -> dict:
+    result = _serper_search(query=query or "测试", num=1)
+    return {
+        "ok": bool(result.get("ok")),
+        "status": result.get("status"),
+        "error": result.get("error"),
+    }
 
 
 def _dedupe_keep_order(items: List[str]) -> List[str]:
@@ -98,6 +179,8 @@ def collect_hot_topics(category: str, city: Optional[str] = None, seed: Optional
     sources: List[Dict[str, str]] = []
     fallback_used = False
     provider = "serper"
+    serper_ok = False
+    serper_status: Optional[int] = None
 
     serper_key = (os.getenv("SERPER_API_KEY") or "").strip()
     if serper_key:
@@ -107,29 +190,29 @@ def collect_hot_topics(category: str, city: Optional[str] = None, seed: Optional
         query = " ".join(query_parts)
 
         try:
-            if hasattr(search_module, "search_sources_with_meta"):
-                results, errors, meta = search_module.search_sources_with_meta(query=query, limit=8)
-                provider = str((meta or {}).get("provider") or "serper")
+            serper_result = _serper_search(query=query, num=8)
+            serper_ok = bool(serper_result.get("ok"))
+            serper_status = serper_result.get("status")
+
+            if not serper_ok:
+                warnings.append(
+                    f"serper_failed status={serper_status} error={serper_result.get('error') or 'unknown'}"
+                )
             else:
-                provider_client = search_module.get_search_provider("serper")
-                result_rows = provider_client.search(query=query, limit=8)
-                results = result_rows or []
-                errors = []
-                meta = {"provider": "serper", "status_code": 200, "error_type": None}
-                provider = "serper"
+                data = serper_result.get("data") or {}
+                organic = data.get("organic") or []
+                for row in organic[:8]:
+                    result = SearchResult(
+                        title=str((row or {}).get("title") or "").strip(),
+                        url=str((row or {}).get("link") or "").strip(),
+                        snippet=str((row or {}).get("snippet") or "").strip(),
+                    )
+                    sources.append(_safe_source(result))
+                    hot_topics.extend(_topic_from_text(result.title))
+                    hot_topics.extend(_topic_from_text(result.snippet))
 
-            if errors:
-                warnings.append(f"search_errors: {' | '.join(errors)}")
-
-            for result in results or []:
-                sources.append(_safe_source(result))
-                hot_topics.extend(_topic_from_text(result.title))
-                hot_topics.extend(_topic_from_text(result.snippet))
-
-            if not results:
-                status = (meta or {}).get("status_code")
-                err = (meta or {}).get("error_type")
-                warnings.append(f"serper_no_results status={status} error={err}")
+                if not organic:
+                    warnings.append("serper_no_results status=200 error=empty_organic")
         except Exception as exc:
             warnings.append(f"serper_exception: {exc}")
             logger.warning("collect_hot_topics serper failed: %s", exc)
@@ -164,4 +247,6 @@ def collect_hot_topics(category: str, city: Optional[str] = None, seed: Optional
         "fallback_used": fallback_used,
         "warnings": warnings,
         "provider": provider,
+        "serper_ok": serper_ok,
+        "serper_status": serper_status,
     }

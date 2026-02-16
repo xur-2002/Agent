@@ -300,6 +300,14 @@ def generate_publishable_ads(
     usage_map: Dict[str, Dict[str, Any]] = {}
     warnings: List[str] = []
 
+    def _is_fatal_llm_config_error(exc: Exception) -> bool:
+        msg = str(exc or "")
+        return isinstance(exc, ValueError) and (
+            "Missing LLM_MODEL" in msg
+            or "Missing LLM_API_KEY" in msg
+            or "Missing LLM_BASE_URL" in msg
+        )
+
     for channel in normalized_channels:
         try:
             content, usage = generate_publishable_ad(
@@ -319,6 +327,8 @@ def generate_publishable_ads(
             contents[channel] = content
             usage_map[channel] = usage
         except Exception as exc:
+            if _is_fatal_llm_config_error(exc):
+                raise
             warnings.append(f"channel_generate_failed:{channel}:{exc}")
             contents[channel] = _build_fallback_content(
                 channel=channel,

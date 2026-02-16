@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
+import os
 import re
 import sys
 import time
@@ -16,11 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from agent.ad_llm import generate_publishable_ads
 from agent.hot_topics import collect_hot_topics
-from agent.quality_eval import eval_text
-from agent.topic_sanitizer import sanitize_hot_topics
-
-
-logger = logging.getLogger(__name__)
+from agent.llm_client import LLMClient
 
 
 FORBIDDEN_FILENAME_CHARS = r'<>:"/\\|?*'
@@ -130,9 +126,6 @@ def _write_outputs(
     warnings: List[str],
     seed: Optional[int],
     elapsed: float,
-    sanitization: Optional[Dict[str, Any]] = None,
-    quality: Optional[Dict[str, Any]] = None,
-    write_quality_report: bool = False,
 ) -> Path:
     day = datetime.now().strftime("%Y-%m-%d")
     channels_tag = "-".join(channels)
@@ -206,18 +199,9 @@ def _write_outputs(
         "files": files,
         "elapsed": round(elapsed, 3),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "channels": channels,
     }
-
-    if sanitization is not None:
-        meta["sanitization"] = sanitization
-    if quality is not None:
-        meta["quality"] = quality
-
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    if write_quality_report and quality is not None:
-        quality_report_path = output_dir / "quality_report.json"
-        quality_report_path.write_text(json.dumps(quality, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return output_dir
 
@@ -234,8 +218,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--extra", default="", help="补充信息（卖点/价格区间/活动/网址等）")
     parser.add_argument("--temperature", type=float, default=0.9, help="LLM temperature")
     parser.add_argument("--max-tokens", type=int, default=1200, help="LLM max tokens")
-    parser.add_argument("--sanitize", action="store_true", help="启用热点/素材清洗（默认关闭）")
-    parser.add_argument("--quality-report", action="store_true", help="启用质量评测并输出 quality_report.json（默认关闭）")
 
     args = parser.parse_args(argv)
     start = time.perf_counter()
@@ -249,38 +231,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     extra = args.extra.strip() or None
 
     try:
+        env_base_url = (os.getenv("LLM_BASE_URL") or "").strip()
+        env_model = (os.getenv("LLM_MODEL") or "").strip()
+        env_serper = "SET" if (os.getenv("SERPER_API_KEY") or "").strip() else "MISSING"
+        print(
+            f"[ad_cli] env: base_url={env_base_url or 'MISSING'} model={env_model or 'MISSING'} serper_key={env_serper}"
+        )
+
+        llm_client = LLMClient()
+        llm_request_url = f"{llm_client.base_url}/chat/completions"
+        print(f"[ad_cli] request_url={llm_request_url}")
+
         hot_result = collect_hot_topics(category=category, city=city, seed=args.seed)
         hot_topics = hot_result.get("hot_topics") or []
         sources = hot_result.get("sources") or []
+        print(f"[ad_cli] serper_ok={bool(hot_result.get('serper_ok'))} status={hot_result.get('serper_status')}")
 
         warnings = list(hot_result.get("warnings") or [])
-        sanitization_meta: Optional[Dict[str, Any]] = None
-
-        if args.sanitize:
-            try:
-                clean_topics, clean_sources, sanitize_report = sanitize_hot_topics(hot_topics, sources)
-                hot_topics = clean_topics
-                sources = clean_sources
-                removed_items = sanitize_report.get("removed_items") or []
-                sanitization_meta = {
-                    "enabled": True,
-                    "removed_items_count": len(removed_items),
-                    "removed_items_sample": removed_items[:5],
-                    "topic_before": sanitize_report.get("topic_before", 0),
-                    "topic_after": sanitize_report.get("topic_after", 0),
-                    "source_before": sanitize_report.get("source_before", 0),
-                    "source_after": sanitize_report.get("source_after", 0),
-                }
-            except Exception as exc:
-                logger.warning("sanitize_hot_topics failed: %s", exc)
-                warnings.append(f"sanitize_failed:{exc}")
-                sanitization_meta = {
-                    "enabled": True,
-                    "error": str(exc),
-                    "removed_items_count": 0,
-                    "removed_items_sample": [],
-                }
-
         channel_contents, channel_usage, gen_warnings = generate_publishable_ads(
             category=category,
             channels=channels,
@@ -293,6 +260,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             seed=args.seed,
             temperature=args.temperature,
             max_tokens=args.max_tokens,
+            llm_client=llm_client,
         )
         warnings.extend(gen_warnings)
 
@@ -302,26 +270,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                 brand,
                 min_count=2,
             )
-
-        quality_meta: Optional[Dict[str, Any]] = None
-        if args.quality_report:
-            quality_meta = {}
-            for current_channel in channels:
-                content = channel_contents.get(current_channel, "")
-                try:
-                    quality_meta[current_channel] = eval_text(
-                        channel=current_channel,
-                        text=content,
-                        brand=brand,
-                        category=category,
-                    )
-                except Exception as exc:
-                    logger.warning("quality eval failed for channel=%s: %s", current_channel, exc)
-                    warnings.append(f"quality_eval_failed:{current_channel}:{exc}")
-                    quality_meta[current_channel] = {
-                        "error": str(exc),
-                        "risk_flags": [],
-                    }
 
         elapsed = time.perf_counter() - start
         output_dir = _write_outputs(
@@ -340,9 +288,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             warnings=warnings,
             seed=args.seed,
             elapsed=elapsed,
-            sanitization=sanitization_meta,
-            quality=quality_meta,
-            write_quality_report=bool(args.quality_report),
         )
 
         request_url = None
@@ -352,14 +297,18 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         print(f"[ad_cli] hot_topics={len(hot_topics)} fallback={bool(hot_result.get('fallback_used'))}")
         print(f"[ad_cli] channels={','.join(channels)}")
-        print(f"[ad_cli] request_url={request_url or 'N/A'}")
+        print(f"[ad_cli] request_url={request_url or llm_request_url}")
         print(f"[ad_cli] output_dir={output_dir}")
+        print("[ad_cli] files=wechat.md,xiaohongshu.md,douyin_script.md,meta.json")
         print(f"[ad_cli] preview={_preview(preview_text, max_len=120)}")
         print(f"[ad_cli] elapsed={elapsed:.2f}s")
         return 0
     except Exception as exc:
         elapsed = time.perf_counter() - start
-        print(f"[ad_cli] fatal_error={exc}", file=sys.stderr)
+        if "Missing LLM_MODEL" in str(exc):
+            print("[ad_cli] fatal_error=Missing LLM_MODEL (set $env:LLM_MODEL=...)", file=sys.stderr)
+        else:
+            print(f"[ad_cli] fatal_error={exc}", file=sys.stderr)
         print(f"[ad_cli] elapsed={elapsed:.2f}s", file=sys.stderr)
         return 1
 
