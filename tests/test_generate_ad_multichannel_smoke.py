@@ -4,6 +4,10 @@ import scripts.generate_ad as generate_ad
 
 
 def test_generate_ad_multichannel_smoke(tmp_path, monkeypatch):
+    class FakeClient:
+        def __init__(self):
+            self.base_url = "https://api.groq.com/openai/v1"
+
     def fake_hot_topics(category, city=None, seed=None):
         return {
             "hot_topics": ["预算怎么定", "避坑清单", "口碑争议点", "选购优先级", "适合人群"],
@@ -47,6 +51,7 @@ def test_generate_ad_multichannel_smoke(tmp_path, monkeypatch):
         return contents, usage, []
 
     monkeypatch.setattr(generate_ad, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(generate_ad, "LLMClient", FakeClient)
     monkeypatch.setattr(generate_ad, "collect_hot_topics", fake_hot_topics)
     monkeypatch.setattr(generate_ad, "generate_publishable_ads", fake_generate_publishable_ads)
 
@@ -94,6 +99,10 @@ def test_generate_ad_multichannel_smoke(tmp_path, monkeypatch):
     assert "wechat.md" in files
     assert "xiaohongshu.md" in files
     assert "douyin_script.md" in files
+
+    channels = meta.get("channels")
+    assert channels == ["wechat", "xiaohongshu", "douyin"]
+    assert "word_count" in meta and isinstance(meta["word_count"], dict)
 
     channels_meta = meta.get("channels_meta")
     assert isinstance(channels_meta, dict)
