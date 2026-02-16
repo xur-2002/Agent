@@ -16,6 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from agent.ad_llm import generate_publishable_ads
 from agent.hot_topics import collect_hot_topics
+from agent.quality_eval import eval_text
 from agent.topic_sanitizer import sanitize_hot_topics
 
 
@@ -130,6 +131,8 @@ def _write_outputs(
     seed: Optional[int],
     elapsed: float,
     sanitization: Optional[Dict[str, Any]] = None,
+    quality: Optional[Dict[str, Any]] = None,
+    write_quality_report: bool = False,
 ) -> Path:
     day = datetime.now().strftime("%Y-%m-%d")
     channels_tag = "-".join(channels)
@@ -207,8 +210,14 @@ def _write_outputs(
 
     if sanitization is not None:
         meta["sanitization"] = sanitization
+    if quality is not None:
+        meta["quality"] = quality
 
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    if write_quality_report and quality is not None:
+        quality_report_path = output_dir / "quality_report.json"
+        quality_report_path.write_text(json.dumps(quality, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return output_dir
 
@@ -226,6 +235,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--temperature", type=float, default=0.9, help="LLM temperature")
     parser.add_argument("--max-tokens", type=int, default=1200, help="LLM max tokens")
     parser.add_argument("--sanitize", action="store_true", help="启用热点/素材清洗（默认关闭）")
+    parser.add_argument("--quality-report", action="store_true", help="启用质量评测并输出 quality_report.json（默认关闭）")
 
     args = parser.parse_args(argv)
     start = time.perf_counter()
@@ -293,6 +303,26 @@ def main(argv: Optional[List[str]] = None) -> int:
                 min_count=2,
             )
 
+        quality_meta: Optional[Dict[str, Any]] = None
+        if args.quality_report:
+            quality_meta = {}
+            for current_channel in channels:
+                content = channel_contents.get(current_channel, "")
+                try:
+                    quality_meta[current_channel] = eval_text(
+                        channel=current_channel,
+                        text=content,
+                        brand=brand,
+                        category=category,
+                    )
+                except Exception as exc:
+                    logger.warning("quality eval failed for channel=%s: %s", current_channel, exc)
+                    warnings.append(f"quality_eval_failed:{current_channel}:{exc}")
+                    quality_meta[current_channel] = {
+                        "error": str(exc),
+                        "risk_flags": [],
+                    }
+
         elapsed = time.perf_counter() - start
         output_dir = _write_outputs(
             channels=channels,
@@ -311,6 +341,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             seed=args.seed,
             elapsed=elapsed,
             sanitization=sanitization_meta,
+            quality=quality_meta,
+            write_quality_report=bool(args.quality_report),
         )
 
         request_url = None
