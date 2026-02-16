@@ -726,46 +726,6 @@ In GitHub Actions, logs are automatically uploaded as artifacts. Download from t
 
 **Check:** Verify all 4 Bitable env vars are set in GitHub Secrets. Agent will log at startup if using Bitable.
 
-## Universal Ad CLI Baseline & Optional Enhancements
-
-### Baseline freeze
-
-- Baseline branch: `baseline/universal-ad-cli-v1`
-- Baseline tag: `universal-ad-cli-v1.0.0`
-- Purpose: lock a known-good multi-channel CLI version for rollback and A/B comparison.
-
-### PowerShell quick commands
-
-```powershell
-# 1) Switch to frozen baseline
-git switch baseline/universal-ad-cli-v1
-
-# 2) Run smoke tests
-pytest -q tests/test_generate_ad_smoke.py tests/test_generate_ad_multichannel_smoke.py
-
-# 3) Generate 3 channels in one run
-python .\scripts\generate_ad.py --category "卡车/皮卡/越野车改装配件" --brand "TKM AUTO" --city "全国" --channels all --tone "硬核、直接、带一点热血" --seed 2
-```
-
-### Optional sidecar switches (default off)
-
-- `--sanitize`: sanitize hot topics and sources via blocklist (non-blocking).
-- `--quality-report`: generate `quality_report.json` with lightweight rule-based scoring.
-
-```powershell
-# Default generation behavior (unchanged)
-python .\scripts\generate_ad.py --category "葡萄酒" --brand "台州红酒庄" --city "台州" --channels all --seed 2
-
-# Enable sanitize only
-python .\scripts\generate_ad.py --category "葡萄酒" --brand "台州红酒庄" --city "台州" --channels all --seed 2 --sanitize
-
-# Enable quality report only
-python .\scripts\generate_ad.py --category "葡萄酒" --brand "台州红酒庄" --city "台州" --channels all --seed 2 --quality-report
-
-# Enable both sidecar features
-python .\scripts\generate_ad.py --category "葡萄酒" --brand "台州红酒庄" --city "台州" --channels all --seed 2 --sanitize --quality-report
-```
-
 ## Development
 
 ### Project Structure
@@ -828,3 +788,34 @@ Open source. No LICENSE file currently. Use as you wish. Consider adding a LICEN
 - ✅ Documented Groq free LLM provider setup (new feature)
 - ✅ Removed "5-minute minimum" claim (GitHub now supports 1-minute cron)
 - ✅ Updated architecture diagram to show article generation pipeline and outputs commit
+
+## Universal Ad CLI PowerShell Quick Verify
+
+### 1) Set OpenAI-compatible Groq + Serper environment
+
+```powershell
+$env:LLM_BASE_URL="https://api.groq.com/openai/v1"
+$env:LLM_API_KEY="你的_gsk_..."
+$env:LLM_MODEL="groq/compound"
+$env:SERPER_API_KEY="你的_serper_..."
+```
+
+### 2) One-command generation (3 channels)
+
+```powershell
+python .\scripts\generate_ad.py `
+  --category "卡车/皮卡/越野车改装配件" `
+  --brand "TKM AUTO" `
+  --city "全国" `
+  --channels "wechat,xiaohongshu,douyin" `
+  --tone "硬核、直接、带一点热血" `
+  --seed 2
+```
+
+### 3) Open output directory
+
+After the CLI prints `output_dir`, open it directly:
+
+```powershell
+ii "<output_dir>"
+```
