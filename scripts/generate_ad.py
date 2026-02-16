@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import sys
 import time
@@ -15,6 +16,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from agent.ad_llm import generate_publishable_ads
 from agent.hot_topics import collect_hot_topics
+from agent.topic_sanitizer import sanitize_hot_topics
+
+
+logger = logging.getLogger(__name__)
 
 
 FORBIDDEN_FILENAME_CHARS = r'<>:"/\\|?*'
@@ -124,6 +129,7 @@ def _write_outputs(
     warnings: List[str],
     seed: Optional[int],
     elapsed: float,
+    sanitization: Optional[Dict[str, Any]] = None,
 ) -> Path:
     day = datetime.now().strftime("%Y-%m-%d")
     channels_tag = "-".join(channels)
@@ -198,6 +204,10 @@ def _write_outputs(
         "elapsed": round(elapsed, 3),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
     }
+
+    if sanitization is not None:
+        meta["sanitization"] = sanitization
+
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return output_dir
@@ -215,6 +225,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--extra", default="", help="补充信息（卖点/价格区间/活动/网址等）")
     parser.add_argument("--temperature", type=float, default=0.9, help="LLM temperature")
     parser.add_argument("--max-tokens", type=int, default=1200, help="LLM max tokens")
+    parser.add_argument("--sanitize", action="store_true", help="启用热点/素材清洗（默认关闭）")
 
     args = parser.parse_args(argv)
     start = time.perf_counter()
@@ -233,6 +244,33 @@ def main(argv: Optional[List[str]] = None) -> int:
         sources = hot_result.get("sources") or []
 
         warnings = list(hot_result.get("warnings") or [])
+        sanitization_meta: Optional[Dict[str, Any]] = None
+
+        if args.sanitize:
+            try:
+                clean_topics, clean_sources, sanitize_report = sanitize_hot_topics(hot_topics, sources)
+                hot_topics = clean_topics
+                sources = clean_sources
+                removed_items = sanitize_report.get("removed_items") or []
+                sanitization_meta = {
+                    "enabled": True,
+                    "removed_items_count": len(removed_items),
+                    "removed_items_sample": removed_items[:5],
+                    "topic_before": sanitize_report.get("topic_before", 0),
+                    "topic_after": sanitize_report.get("topic_after", 0),
+                    "source_before": sanitize_report.get("source_before", 0),
+                    "source_after": sanitize_report.get("source_after", 0),
+                }
+            except Exception as exc:
+                logger.warning("sanitize_hot_topics failed: %s", exc)
+                warnings.append(f"sanitize_failed:{exc}")
+                sanitization_meta = {
+                    "enabled": True,
+                    "error": str(exc),
+                    "removed_items_count": 0,
+                    "removed_items_sample": [],
+                }
+
         channel_contents, channel_usage, gen_warnings = generate_publishable_ads(
             category=category,
             channels=channels,
@@ -272,6 +310,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             warnings=warnings,
             seed=args.seed,
             elapsed=elapsed,
+            sanitization=sanitization_meta,
         )
 
         request_url = None

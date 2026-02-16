@@ -8,7 +8,9 @@ import random
 import re
 from typing import Any, Dict, List, Optional
 
-from agent.content_pipeline.search import SearchResult, search_sources_with_meta
+from agent.content_pipeline import search as search_module
+
+SearchResult = search_module.SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -105,8 +107,16 @@ def collect_hot_topics(category: str, city: Optional[str] = None, seed: Optional
         query = " ".join(query_parts)
 
         try:
-            results, errors, meta = search_sources_with_meta(query=query, limit=8)
-            provider = str((meta or {}).get("provider") or "serper")
+            if hasattr(search_module, "search_sources_with_meta"):
+                results, errors, meta = search_module.search_sources_with_meta(query=query, limit=8)
+                provider = str((meta or {}).get("provider") or "serper")
+            else:
+                provider_client = search_module.get_search_provider("serper")
+                result_rows = provider_client.search(query=query, limit=8)
+                results = result_rows or []
+                errors = []
+                meta = {"provider": "serper", "status_code": 200, "error_type": None}
+                provider = "serper"
 
             if errors:
                 warnings.append(f"search_errors: {' | '.join(errors)}")
