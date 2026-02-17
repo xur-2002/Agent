@@ -36,9 +36,19 @@ ENV/
 
 # Logs
 *.log
+logs/
 
 # Temporary files
 *.tmp
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
 
 state.json
 outputs/

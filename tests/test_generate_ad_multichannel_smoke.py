@@ -53,7 +53,7 @@ def test_generate_ad_multichannel_smoke(tmp_path, monkeypatch):
     monkeypatch.setattr(generate_ad, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(generate_ad, "LLMClient", FakeClient)
     monkeypatch.setattr(generate_ad, "collect_hot_topics", fake_hot_topics)
-    monkeypatch.setattr(generate_ad, "generate_publishable_ads", fake_generate_publishable_ads)
+    monkeypatch.setattr(generate_ad, "generate_publishable_ads_with_meta", fake_generate_publishable_ads)
 
     code = generate_ad.main([
         "--category", "葡萄酒",

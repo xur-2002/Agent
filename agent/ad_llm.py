@@ -127,6 +127,7 @@ def _build_system_message(channel: str, brand: Optional[str], has_sources: bool,
     base = [
         "你是顶级增长文案/广告创意总监。",
         "不能编造具体不可验证的事实（例如全网第一/销量第一/官方认证），除非用户 extra 提供。",
+        "禁止使用固定模板章节词：为什么现在、卖什么给谁解决什么、场景痛点等套路化小标题。",
         source_rule,
         f"文中自然出现品牌名（若提供）至少 2 次，但不要像硬广堆砌{'（本次品牌为空则无需强制）' if not brand else ''}。",
     ]
@@ -273,7 +274,7 @@ def generate_publishable_ad(
     return ad_markdown, usage_meta
 
 
-def generate_publishable_ads(
+def generate_publishable_ads_with_meta(
     *,
     category: str,
     channels: Optional[List[str]] = None,
@@ -352,3 +353,44 @@ def generate_publishable_ads(
             }
 
     return contents, usage_map, warnings
+
+
+def generate_publishable_ads(
+    inputs: Dict[str, Any],
+    hot_topics_result: Dict[str, Any],
+    llm_client: Optional[LLMClient] = None,
+    channels: Optional[List[str]] = None,
+) -> Dict[str, str]:
+    """Unified multi-channel entry point.
+
+    Args:
+        inputs: input dict including category/brand/city/tone/extra/seed/temperature/max_tokens
+        hot_topics_result: dict from collect_hot_topics including hot_topics/sources
+        llm_client: optional preconfigured LLM client
+        channels: requested channels list (wechat/xiaohongshu/douyin)
+
+    Returns:
+        Dict[channel, markdown_content]
+    """
+    payload = dict(inputs or {})
+    category = str(payload.get("category") or "").strip()
+    if not category:
+        raise ValueError("category is required")
+
+    resolved_channels = channels or payload.get("channels") or ["wechat"]
+
+    contents, _usage, _warnings = generate_publishable_ads_with_meta(
+        category=category,
+        channels=list(resolved_channels),
+        brand=(str(payload.get("brand") or "").strip() or None),
+        city=(str(payload.get("city") or "").strip() or None),
+        tone=str(payload.get("tone") or "专业但有感染力").strip() or "专业但有感染力",
+        extra=(str(payload.get("extra") or "").strip() or None),
+        hot_topics=list((hot_topics_result or {}).get("hot_topics") or []),
+        sources=list((hot_topics_result or {}).get("sources") or []),
+        seed=payload.get("seed"),
+        temperature=float(payload.get("temperature") or 0.9),
+        max_tokens=int(payload.get("max_tokens") or 1200),
+        llm_client=llm_client,
+    )
+    return contents

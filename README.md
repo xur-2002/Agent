@@ -834,6 +834,37 @@ notepad++ "<output_dir>\xiaohongshu.md"
 notepad++ "<output_dir>\douyin_script.md"
 ```
 
+### Release Quick Commands (Windows PowerShell)
+
+Required env vars for Universal Ad CLI:
+
+```powershell
+$env:LLM_BASE_URL="https://api.groq.com/openai/v1"
+$env:LLM_MODEL="groq/compound"
+$env:LLM_API_KEY="你的_llm_key"
+$env:SERPER_API_KEY="你的_serper_key"
+# Optional for push
+$env:FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/你的_webhook"
+```
+
+Generate multi-channel:
+
+```powershell
+python .\scripts\generate_ad.py --category "卡车/皮卡/越野车改装配件" --brand "TKM AUTO" --city "全国" --channels "wechat,xiaohongshu,douyin" --tone "硬核、直接、带一点热血" --seed 2
+```
+
+Generate single channel (wechat):
+
+```powershell
+python .\scripts\generate_ad.py --category "卡车/皮卡/越野车改装配件" --brand "TKM AUTO" --city "全国" --channel "wechat" --tone "硬核、直接、带一点热血" --seed 2
+```
+
+Generate and push to Feishu:
+
+```powershell
+python .\scripts\generate_ad.py --category "卡车/皮卡/越野车改装配件" --brand "TKM AUTO" --city "全国" --channels "wechat,xiaohongshu,douyin" --tone "硬核、直接、带一点热血" --seed 2 --push feishu
+```
+
 ## Push to Feishu (Webhook)
 
 1) 在飞书群里添加“自定义机器人”，复制 Webhook URL。
