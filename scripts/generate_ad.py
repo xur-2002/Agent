@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -14,7 +15,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from agent.ad_llm import generate_publishable_ads
+from agent.ad_llm import generate_publishable_ads_with_meta
+from agent.feishu_webhook import get_webhook_info, send_text_detailed
 from agent.hot_topics import collect_hot_topics
 from agent.llm_client import LLMClient
 
@@ -74,9 +76,9 @@ def _resolve_channels(channels_value: Optional[str], channel_value: Optional[str
             return ["wechat", "xiaohongshu", "douyin"]
         return [normalized]
 
-    raw = str(channels_value or "all").strip()
+    raw = str(channels_value or "wechat").strip()
     if not raw:
-        raw = "all"
+        raw = "wechat"
     pieces = [p.strip() for p in raw.split(",") if p.strip()]
     if not pieces:
         pieces = ["all"]
@@ -91,7 +93,7 @@ def _resolve_channels(channels_value: Optional[str], channel_value: Optional[str
             continue
         if normalized not in resolved:
             resolved.append(normalized)
-    return resolved or ["wechat", "xiaohongshu", "douyin"]
+    return resolved or ["wechat"]
 
 
 def _count_words(text: str) -> int:
@@ -206,6 +208,55 @@ def _write_outputs(
     return output_dir
 
 
+def _truncate_for_push(text: str, limit: int = 3500) -> str:
+    content = str(text or "")
+    if len(content) <= limit:
+        return content
+    return content[:limit] + "\n\n(truncated)"
+
+
+def _split_for_push(text: str, max_len: int = 3000) -> List[str]:
+    content = str(text or "")
+    if len(content) <= max_len:
+        return [content]
+    chunks: List[str] = []
+    start = 0
+    while start < len(content):
+        end = min(start + max_len, len(content))
+        chunks.append(content[start:end])
+        start = end
+    return chunks
+
+
+def _update_meta_push_status(
+    output_dir: Path,
+    warnings: List[str],
+    push_status: Dict[str, Any],
+) -> None:
+    meta_path = output_dir / "meta.json"
+    if not meta_path.exists():
+        return
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    meta["warnings"] = list(warnings)
+    meta["feishu_push"] = dict(push_status)
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _write_feishu_push_log(output_dir: Path, records: List[Dict[str, Any]]) -> None:
+    payload = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "records": records,
+    }
+    (output_dir / "feishu_push_log.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Generate universal publishable ad from category + hot topics")
     parser.add_argument("--category", required=True, help="产品品类（通用）")
@@ -218,6 +269,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--extra", default="", help="补充信息（卖点/价格区间/活动/网址等）")
     parser.add_argument("--temperature", type=float, default=0.9, help="LLM temperature")
     parser.add_argument("--max-tokens", type=int, default=1200, help="LLM max tokens")
+    parser.add_argument("--push", choices=["none", "feishu"], default="none", help="生成后可选推送")
 
     args = parser.parse_args(argv)
     start = time.perf_counter()
@@ -234,9 +286,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         env_base_url = (os.getenv("LLM_BASE_URL") or "").strip()
         env_model = (os.getenv("LLM_MODEL") or "").strip()
         env_serper = "SET" if (os.getenv("SERPER_API_KEY") or "").strip() else "MISSING"
+        webhook_info = get_webhook_info()
+        webhook_set_text = "SET" if webhook_info.get("webhook_set") else "MISSING"
         print(
             f"[ad_cli] env: base_url={env_base_url or 'MISSING'} model={env_model or 'MISSING'} serper_key={env_serper}"
         )
+        print(
+            f"[ad_cli] feishu_env: webhook={webhook_set_text} host={webhook_info.get('webhook_host') or 'N/A'} hash={webhook_info.get('webhook_hash') or 'N/A'}"
+        )
+        if webhook_info.get("webhook_set") and webhook_info.get("looks_malformed"):
+            print("[ad_cli] warning: FEISHU_WEBHOOK_URL looks malformed")
 
         llm_client = LLMClient()
         llm_request_url = f"{llm_client.base_url}/chat/completions"
@@ -248,7 +307,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"[ad_cli] serper_ok={bool(hot_result.get('serper_ok'))} status={hot_result.get('serper_status')}")
 
         warnings = list(hot_result.get("warnings") or [])
-        channel_contents, channel_usage, gen_warnings = generate_publishable_ads(
+        channel_contents, channel_usage, gen_warnings = generate_publishable_ads_with_meta(
             category=category,
             channels=channels,
             brand=brand,
@@ -289,6 +348,99 @@ def main(argv: Optional[List[str]] = None) -> int:
             seed=args.seed,
             elapsed=elapsed,
         )
+
+        if args.push == "feishu":
+            run_id = datetime.now().strftime("%Y%m%d-%H%M%S") + f"-{hashlib.sha1(str(time.time()).encode()).hexdigest()[:4]}"
+            webhook_set = bool(webhook_info.get("webhook_set"))
+            push_errors: List[str] = []
+            messages_sent = 0
+            responses: List[Dict[str, Any]] = []
+
+            word_count_map = {ch: _count_words(channel_contents.get(ch, "")) for ch in channels}
+            receipt_text = (
+                f"[Universal Ad CLI Receipt]\n"
+                f"run_id={run_id}\n"
+                f"brand={brand}\n"
+                f"category={category}\n"
+                f"city={city}\n"
+                f"channels={','.join(channels)}\n"
+                f"files=wechat.md,xiaohongshu.md,douyin_script.md,meta.json\n"
+                f"output_dir={output_dir}"
+            )
+            receipt_resp = send_text_detailed(receipt_text)
+            receipt_resp["label"] = "receipt"
+            responses.append(receipt_resp)
+            if receipt_resp.get("ok"):
+                messages_sent += 1
+            else:
+                push_errors.append(f"receipt:{receipt_resp.get('error')}")
+
+            push_targets = [
+                ("wechat", "wechat.md", "公众号内容"),
+                ("xiaohongshu", "xiaohongshu.md", "小红书内容"),
+                ("douyin", "douyin_script.md", "抖音脚本"),
+            ]
+            for channel_key, file_name, title in push_targets:
+                file_path = output_dir / file_name
+                if not file_path.exists():
+                    push_errors.append(f"{channel_key}:missing_file")
+                    continue
+                try:
+                    content = file_path.read_text(encoding="utf-8")
+                except Exception as exc:
+                    push_errors.append(f"{channel_key}:read_failed:{exc}")
+                    continue
+
+                parts = _split_for_push(content, max_len=3000)
+                if len(parts) > 3:
+                    preview = _truncate_for_push(content, limit=800)
+                    body = f"[{title}] run_id={run_id} preview\n{preview}\n\nlocal_file={file_path}"
+                    resp = send_text_detailed(body)
+                    resp["label"] = f"{channel_key}-preview"
+                    responses.append(resp)
+                    if resp.get("ok"):
+                        messages_sent += 1
+                    else:
+                        push_errors.append(f"{channel_key}:{resp.get('error')}")
+                else:
+                    total = len(parts)
+                    for idx, chunk in enumerate(parts, start=1):
+                        body = f"[{title}] run_id={run_id} part {idx}/{total}\n{chunk}"
+                        resp = send_text_detailed(body)
+                        resp["label"] = f"{channel_key}-part-{idx}"
+                        responses.append(resp)
+                        if resp.get("ok"):
+                            messages_sent += 1
+                        else:
+                            push_errors.append(f"{channel_key}:part{idx}:{resp.get('error')}")
+
+            push_ok = webhook_set and not push_errors
+            if push_errors:
+                warnings.append("push_failed:" + " | ".join(push_errors))
+
+            push_status = {
+                "ok": bool(push_ok),
+                "messages_sent": int(messages_sent),
+                "errors": push_errors,
+                "webhook_set": webhook_set,
+                "run_id": run_id,
+                "webhook_host": webhook_info.get("webhook_host"),
+                "webhook_hash": webhook_info.get("webhook_hash"),
+                "webhook_masked": webhook_info.get("webhook_masked"),
+                "responses": responses,
+            }
+            _update_meta_push_status(output_dir, warnings, push_status)
+            _write_feishu_push_log(output_dir, responses)
+
+            summary_parts = []
+            for item in responses:
+                summary_parts.append(
+                    f"{item.get('label')}=>code={item.get('response_code')} msg={item.get('response_msg')} message_id={item.get('message_id')}"
+                )
+            print(
+                f"[ad_cli] feishu_push: run_id={run_id} webhook_hash={webhook_info.get('webhook_hash') or 'N/A'}"
+            )
+            print(f"[ad_cli] feishu_push_summary: {' | '.join(summary_parts)}")
 
         request_url = None
         for ch in channels:

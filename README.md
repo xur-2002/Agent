@@ -812,6 +812,12 @@ python .\scripts\generate_ad.py `
   --seed 2
 ```
 
+Chinese aliases are also supported:
+
+```powershell
+python .\scripts\generate_ad.py --category "葡萄酒" --brand "台州红酒庄" --city "台州" --channels "公众号,小红书,抖音" --tone "克制、温柔、真实" --seed 1
+```
+
 ### 3) Open output directory
 
 After the CLI prints `output_dir`, open it directly:
@@ -819,3 +825,38 @@ After the CLI prints `output_dir`, open it directly:
 ```powershell
 ii "<output_dir>"
 ```
+
+You can open generated Markdown files with VSCode or Notepad++:
+
+```powershell
+code "<output_dir>\wechat.md"
+notepad++ "<output_dir>\xiaohongshu.md"
+notepad++ "<output_dir>\douyin_script.md"
+```
+
+## Push to Feishu (Webhook)
+
+1) 在飞书群里添加“自定义机器人”，复制 Webhook URL。
+
+2) 在 PowerShell 设置环境变量：
+
+```powershell
+$env:FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/你的_webhook"
+```
+
+3) 一次生成并推送：
+
+```powershell
+python .\scripts\generate_ad.py `
+  --category "卡车/皮卡/越野车改装配件" `
+  --brand "TKM AUTO" `
+  --city "全国" `
+  --channels "wechat,xiaohongshu,douyin" `
+  --tone "硬核、直接、带一点热血" `
+  --seed 2 `
+  --push feishu
+```
+
+即使推送失败也不会阻断生成，`meta.json` 会写入 `feishu_push` 和 `warnings`。
+同时输出目录会包含 `feishu_push_log.json`，便于排查“发送成功但群里不可见”的问题。
+控制台会打印 `run_id` 与 `webhook_hash`，可在飞书群里按 `run_id` 搜索回执消息。
