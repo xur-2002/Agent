@@ -52,6 +52,9 @@ logs/
 
 state.json
 outputs/
+outputs/**
+outputs/**/meta.json
+outputs/**/feishu_push_log.json
 drafts/
 publish_kits/
 test_image_debug.py
