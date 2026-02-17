@@ -1,6 +1,6 @@
 # Agent MVP - Autonomous Task Automation for Content & Monitoring
 
-A **production-ready Python agent** that automatically runs monitoring and content generation tasks every minute, executes them concurrently, and sends real-time updates to Feishu via rich interactive cards.
+A **production-ready Python agent** that runs monitoring and content generation tasks, executes them concurrently, and sends real-time updates to Feishu via rich interactive cards.
 
 **Core Mission:** Zero-cost article generation + multi-source monitoring + real-time notifications = fully autonomous content production pipeline.
 
@@ -19,10 +19,9 @@ Go to repo **Settings → Secrets and variables → Actions**, add these:
 | `SERPER_API_KEY` | Search enhancement (optional) | ❌ No |
 | `OPENAI_API_KEY` | Fallback LLM provider (optional) | ❌ No |
 
-### 2. Trigger Manually (or wait for automatic run)
+### 2. Trigger Manually
 
 - **Manual:** Go to **Actions → Agent MVP Workflow → Run workflow**
-- **Automatic:** Workflow runs **every minute** via GitHub Actions cron (`* * * * *`)
 
 ### 3. View Results
 
@@ -39,8 +38,8 @@ Go to repo **Settings → Secrets and variables → Actions**, add these:
 3. **Supports 9+ task types** with configurable parameters
 4. **Sends Feishu cards** with task results and failure alerts
 5. **Persists state** in `state.json` (local) or optional Feishu Bitable database
-6. **Runs every minute** via GitHub Actions cron (`* * * * *`)
-7. **Supports external triggers** via GitHub API dispatch (workflow_dispatch, repository_dispatch)
+6. **Runs on manual trigger** via GitHub Actions (`workflow_dispatch`)
+7. **Supports safe defaults** with Feishu push kill-switch (`FEISHU_PUSH_ENABLED=0` by default)
 8. **Generates articles** with Groq LLM (free) or OpenAI (paid), saves to `outputs/articles/`
 9. **Provides detailed logging** for observability and debugging
 
@@ -50,9 +49,7 @@ Go to repo **Settings → Secrets and variables → Actions**, add these:
 ┌──────────────────────────────────────────────────────────────────┐
 │                           TRIGGERS                               │
 ├──────────────────────────────────────────────────────────────────┤
-│ • GitHub Actions Cron (every minute: * * * * *)                 │
-│ • Manual dispatch (workflow_dispatch from Actions tab)          │
-│ • External cron (Vercel/Cloudflare) → GitHub API dispatch       │
+│ • Manual dispatch (workflow_dispatch from Actions tab)           │
 └─────────────────────┬────────────────────────────────────────────┘
                       │
                       ▼
@@ -845,6 +842,8 @@ $env:LLM_API_KEY="你的_llm_key"
 $env:SERPER_API_KEY="你的_serper_key"
 # Optional for push
 $env:FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/你的_webhook"
+# Global kill-switch (default off)
+$env:FEISHU_PUSH_ENABLED="0"
 ```
 
 Generate multi-channel:
@@ -873,6 +872,7 @@ python scripts/generate_ad.py --category "卡车/皮卡/越野车改装配件" -
 
 ```powershell
 $env:FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/你的_webhook"
+$env:FEISHU_PUSH_ENABLED="1"
 ```
 
 3) 一次生成并推送：

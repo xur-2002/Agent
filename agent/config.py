@@ -9,6 +9,7 @@ class Config:
 
     # Feishu integration
     FEISHU_WEBHOOK_URL: str = os.getenv("FEISHU_WEBHOOK_URL", "")
+    FEISHU_PUSH_ENABLED: str = os.getenv("FEISHU_PUSH_ENABLED", "0")
     FEISHU_MENTION: str = os.getenv("FEISHU_MENTION", "")  # Optional @user_id on failure
 
     # State persistence
@@ -74,8 +75,23 @@ class Config:
     @classmethod
     def validate(cls) -> None:
         """Validate required configuration."""
-        if not cls.FEISHU_WEBHOOK_URL:
+        if cls.is_feishu_push_enabled() and not cls.get_feishu_webhook_url():
             raise ValueError("FEISHU_WEBHOOK_URL environment variable is required")
+
+    @classmethod
+    def is_feishu_push_enabled(cls) -> bool:
+        """Return whether Feishu push is globally enabled (default: disabled)."""
+        return (os.getenv("FEISHU_PUSH_ENABLED", cls.FEISHU_PUSH_ENABLED) or "0").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+
+    @classmethod
+    def get_feishu_webhook_url(cls) -> str:
+        """Return current Feishu webhook URL from environment/config."""
+        return (os.getenv("FEISHU_WEBHOOK_URL", cls.FEISHU_WEBHOOK_URL) or "").strip()
 
     @classmethod
     def get_retry_backoff_list(cls) -> list[float]:
@@ -94,6 +110,7 @@ class Config:
         """Return all config as dict."""
         return {
             "FEISHU_WEBHOOK_URL": "***" if cls.FEISHU_WEBHOOK_URL else "",
+            "FEISHU_PUSH_ENABLED": cls.FEISHU_PUSH_ENABLED,
             "FEISHU_MENTION": cls.FEISHU_MENTION,
             "PERSIST_STATE": cls.PERSIST_STATE,
             "STATE_FILE": cls.STATE_FILE,

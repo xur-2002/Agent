@@ -12,6 +12,12 @@ from urllib.parse import urlsplit
 import requests
 
 
+def _is_push_enabled(explicit_enable: bool = False) -> bool:
+    if explicit_enable:
+        return True
+    return (os.getenv("FEISHU_PUSH_ENABLED", "0") or "0").strip().lower() in ("1", "true", "yes", "on")
+
+
 def _truncate(text: str, limit: int = 300) -> str:
     raw = str(text or "")
     if len(raw) <= limit:
@@ -99,7 +105,7 @@ def _post_with_retry(payload: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     return bool(detail.get("ok")), detail.get("error")
 
 
-def send_payload_detailed(payload: Dict[str, Any]) -> Dict[str, Any]:
+def send_payload_detailed(payload: Dict[str, Any], explicit_enable: bool = False) -> Dict[str, Any]:
     webhook = get_webhook_info()
     result: Dict[str, Any] = {
         "ok": False,
@@ -118,6 +124,11 @@ def send_payload_detailed(payload: Dict[str, Any]) -> Dict[str, Any]:
         "webhook_masked": webhook.get("webhook_masked"),
         "timestamp": datetime.now().isoformat(timespec="seconds"),
     }
+
+    if not _is_push_enabled(explicit_enable=explicit_enable):
+        result["error"] = "Push disabled: set FEISHU_PUSH_ENABLED=1 to enable"
+        result["skipped"] = "disabled"
+        return result
 
     if not webhook.get("webhook_set"):
         result["error"] = "Missing FEISHU_WEBHOOK_URL"
@@ -192,14 +203,14 @@ def send_text(text: str) -> Tuple[bool, Optional[str]]:
     return _post_with_retry(payload)
 
 
-def send_text_detailed(text: str) -> Dict[str, Any]:
+def send_text_detailed(text: str, explicit_enable: bool = False) -> Dict[str, Any]:
     payload = {
         "msg_type": "text",
         "content": {
             "text": str(text or "").strip(),
         },
     }
-    return send_payload_detailed(payload)
+    return send_payload_detailed(payload, explicit_enable=explicit_enable)
 
 
 def send_rich_summary(summary: dict) -> Tuple[bool, Optional[str]]:

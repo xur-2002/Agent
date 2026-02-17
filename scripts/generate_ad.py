@@ -367,7 +367,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 f"files=wechat.md,xiaohongshu.md,douyin_script.md,meta.json\n"
                 f"output_dir={output_dir}"
             )
-            receipt_resp = send_text_detailed(receipt_text)
+            receipt_resp = send_text_detailed(receipt_text, explicit_enable=True)
             receipt_resp["label"] = "receipt"
             responses.append(receipt_resp)
             if receipt_resp.get("ok"):
@@ -395,7 +395,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 if len(parts) > 3:
                     preview = _truncate_for_push(content, limit=800)
                     body = f"[{title}] run_id={run_id} preview\n{preview}\n\nlocal_file={file_path}"
-                    resp = send_text_detailed(body)
+                    resp = send_text_detailed(body, explicit_enable=True)
                     resp["label"] = f"{channel_key}-preview"
                     responses.append(resp)
                     if resp.get("ok"):
@@ -406,7 +406,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     total = len(parts)
                     for idx, chunk in enumerate(parts, start=1):
                         body = f"[{title}] run_id={run_id} part {idx}/{total}\n{chunk}"
-                        resp = send_text_detailed(body)
+                        resp = send_text_detailed(body, explicit_enable=True)
                         resp["label"] = f"{channel_key}-part-{idx}"
                         responses.append(resp)
                         if resp.get("ok"):
