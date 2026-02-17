@@ -850,19 +850,19 @@ $env:FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/你的_web
 Generate multi-channel:
 
 ```powershell
-python .\scripts\generate_ad.py --category "卡车/皮卡/越野车改装配件" --brand "TKM AUTO" --city "全国" --channels "wechat,xiaohongshu,douyin" --tone "硬核、直接、带一点热血" --seed 2
+python scripts/generate_ad.py --category "卡车/皮卡/越野车改装配件" --brand "TKM AUTO" --city "全国" --channels "wechat,xiaohongshu,douyin" --tone "硬核、直接、带一点热血" --seed 2
 ```
 
 Generate single channel (wechat):
 
 ```powershell
-python .\scripts\generate_ad.py --category "卡车/皮卡/越野车改装配件" --brand "TKM AUTO" --city "全国" --channel "wechat" --tone "硬核、直接、带一点热血" --seed 2
+python scripts/generate_ad.py --category "卡车/皮卡/越野车改装配件" --brand "TKM AUTO" --city "全国" --channel "wechat" --tone "硬核、直接、带一点热血" --seed 2
 ```
 
 Generate and push to Feishu:
 
 ```powershell
-python .\scripts\generate_ad.py --category "卡车/皮卡/越野车改装配件" --brand "TKM AUTO" --city "全国" --channels "wechat,xiaohongshu,douyin" --tone "硬核、直接、带一点热血" --seed 2 --push feishu
+python scripts/generate_ad.py --category "卡车/皮卡/越野车改装配件" --brand "TKM AUTO" --city "全国" --channels "wechat,xiaohongshu,douyin" --tone "硬核、直接、带一点热血" --seed 2 --push feishu
 ```
 
 ## Push to Feishu (Webhook)
@@ -878,7 +878,7 @@ $env:FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/你的_web
 3) 一次生成并推送：
 
 ```powershell
-python .\scripts\generate_ad.py `
+python scripts/generate_ad.py `
   --category "卡车/皮卡/越野车改装配件" `
   --brand "TKM AUTO" `
   --city "全国" `
