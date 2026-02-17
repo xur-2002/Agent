@@ -1,10 +1,6 @@
 name: Agent MVP Workflow
 
 on:
-  schedule:
-    # Runs every minute (production-grade)
-    - cron: '* * * * *'
-  
   workflow_dispatch:
     # Manual trigger from Actions tab
     inputs:
@@ -12,10 +8,6 @@ on:
         description: 'Persist state to repo (yes/no, default: no)'
         required: false
         default: 'no'
-  
-  repository_dispatch:
-    # External HTTP trigger via GitHub API
-    types: [agent-trigger]
 
 jobs:
   run_agent:
