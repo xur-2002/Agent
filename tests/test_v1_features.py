@@ -212,6 +212,7 @@ class TestFeishuIntegration:
     def test_feishu_includes_article_content(self, monkeypatch):
         """Test that Feishu card includes copyable article content."""
         monkeypatch.setenv('FEISHU_WEBHOOK_URL', 'http://example.com/webhook')
+        monkeypatch.setenv('FEISHU_PUSH_ENABLED', '1')
         
         with patch('agent.feishu.requests.post') as mock_post:
             mock_post.return_value.status_code = 200
@@ -228,6 +229,7 @@ class TestFeishuIntegration:
     def test_feishu_includes_image_links(self, monkeypatch):
         """Test that Feishu includes clickable image links."""
         monkeypatch.setenv('FEISHU_WEBHOOK_URL', 'http://example.com/webhook')
+        monkeypatch.setenv('FEISHU_PUSH_ENABLED', '1')
         
         # This would be tested in integration tests
         # Here we just verify the structure

@@ -62,6 +62,7 @@ def test_feishu_webhook_push_smoke(tmp_path, monkeypatch):
         return contents, usage, []
 
     monkeypatch.setenv("FEISHU_WEBHOOK_URL", "https://open.feishu.cn/open-apis/bot/v2/hook/test")
+    monkeypatch.setenv("FEISHU_PUSH_ENABLED", "1")
     monkeypatch.setattr(feishu_webhook.requests, "post", fake_post)
 
     monkeypatch.setattr(generate_ad, "PROJECT_ROOT", tmp_path)
@@ -105,3 +106,21 @@ def test_feishu_webhook_push_smoke(tmp_path, monkeypatch):
     assert first_record.get("webhook_hash")
     assert first_record.get("webhook_host") == "open.feishu.cn"
     assert "hook/test" not in json.dumps(first_record, ensure_ascii=False)
+
+
+def test_send_text_detailed_skips_when_push_disabled(monkeypatch):
+    calls = []
+
+    def fake_post(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("requests.post should not be called when push is disabled")
+
+    monkeypatch.setenv("FEISHU_WEBHOOK_URL", "https://open.feishu.cn/open-apis/bot/v2/hook/test")
+    monkeypatch.delenv("FEISHU_PUSH_ENABLED", raising=False)
+    monkeypatch.setattr(feishu_webhook.requests, "post", fake_post)
+
+    result = feishu_webhook.send_text_detailed("hello")
+
+    assert result.get("ok") is False
+    assert result.get("skipped") == "disabled"
+    assert calls == []

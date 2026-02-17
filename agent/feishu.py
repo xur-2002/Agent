@@ -8,6 +8,10 @@ from typing import List, Dict, Any
 logger = logging.getLogger(__name__)
 
 
+def _push_enabled() -> bool:
+    return (os.getenv("FEISHU_PUSH_ENABLED", "0") or "0").strip().lower() in ("1", "true", "yes", "on")
+
+
 def send_text(text: str) -> None:
     """Send a text message to Feishu using Incoming Webhook Bot.
     
@@ -18,6 +22,10 @@ def send_text(text: str) -> None:
         ValueError: If FEISHU_WEBHOOK_URL environment variable is not set.
         requests.RequestException: If the HTTP request fails.
     """
+    if not _push_enabled():
+        logger.info("Feishu push disabled (set FEISHU_PUSH_ENABLED=1 to enable), skipping text message")
+        return
+
     webhook_url = os.getenv("FEISHU_WEBHOOK_URL")
     
     if not webhook_url:
@@ -48,6 +56,10 @@ def send_card(title: str, sections: List[Dict[str, Any]]) -> None:
         ValueError: If FEISHU_WEBHOOK_URL is not set.
         requests.RequestException: If the HTTP request fails.
     """
+    if not _push_enabled():
+        logger.info("Feishu push disabled (set FEISHU_PUSH_ENABLED=1 to enable), skipping card")
+        return
+
     webhook_url = os.getenv("FEISHU_WEBHOOK_URL")
     
     if not webhook_url:
@@ -98,6 +110,10 @@ def send_alert(task_id: str, title: str, error: str) -> None:
         ValueError: If FEISHU_WEBHOOK_URL is not set.
         requests.RequestException: If the HTTP request fails.
     """
+    if not _push_enabled():
+        logger.info("Feishu push disabled (set FEISHU_PUSH_ENABLED=1 to enable), skipping alert")
+        return
+
     webhook_url = os.getenv("FEISHU_WEBHOOK_URL")
     
     if not webhook_url:
@@ -145,6 +161,10 @@ def send_rich_card(
         ValueError: If FEISHU_WEBHOOK_URL is not set.
         requests.RequestException: If the HTTP request fails.
     """
+    if not _push_enabled():
+        logger.info("Feishu push disabled (set FEISHU_PUSH_ENABLED=1 to enable), skipping rich card")
+        return
+
     webhook_url = os.getenv("FEISHU_WEBHOOK_URL")
     
     if not webhook_url:
@@ -301,6 +321,10 @@ def send_alert_card(failed_tasks: List[Dict[str, Any]], run_id: str) -> None:
         logger.debug("No failed tasks, skipping alert card")
         return
     
+    if not _push_enabled():
+        logger.info("Feishu push disabled (set FEISHU_PUSH_ENABLED=1 to enable), skipping alert card")
+        return
+
     webhook_url = os.getenv("FEISHU_WEBHOOK_URL")
     
     if not webhook_url:
@@ -383,6 +407,10 @@ def send_article_generation_results(
     provider = provider or "unknown"
     run_id = run_id or ""
     
+    if not _push_enabled():
+        logger.info("Feishu push disabled (set FEISHU_PUSH_ENABLED=1 to enable), skipping article results")
+        return
+
     webhook_url = os.getenv("FEISHU_WEBHOOK_URL")
     if not webhook_url:
         logger.info("FEISHU_WEBHOOK_URL not set - skipping Feishu notification")

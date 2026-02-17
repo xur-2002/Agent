@@ -1223,10 +1223,14 @@ def _send_feishu_summary(successful: list, failed: list, elapsed: float) -> None
     
     For each topic, include copyable content and image/source links.
     """
-    from agent.config import Config
     import requests
 
-    webhook_url = Config.FEISHU_WEBHOOK_URL
+    push_enabled = (os.getenv("FEISHU_PUSH_ENABLED", "0") or "0").strip().lower() in ("1", "true", "yes", "on")
+    if not push_enabled:
+        logger.info("Feishu push disabled (set FEISHU_PUSH_ENABLED=1 to enable), skipping summary")
+        return
+
+    webhook_url = (os.getenv("FEISHU_WEBHOOK_URL") or "").strip()
     if not webhook_url:
         logger.warning("FEISHU_WEBHOOK_URL not configured, skipping Feishu notification")
         return
