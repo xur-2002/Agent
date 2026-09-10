@@ -33,10 +33,17 @@ jobs:
           print('model=', p)
           PY
           du -sh offline_bundle/model offline_bundle/wheelhouse
-      - name: Upload offline ASR bundle
+      - name: Upload model
         uses: actions/upload-artifact@v4
         with:
-          name: offline-asr-small-py313
-          path: offline_bundle
+          name: offline-whisper-small-model
+          path: offline_bundle/model
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-faster-whisper-py313-wheels
+          path: offline_bundle/wheelhouse
           compression-level: 0
           if-no-files-found: error
