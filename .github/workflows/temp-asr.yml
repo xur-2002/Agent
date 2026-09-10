@@ -25,12 +25,11 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
-      - name: Reassemble and decode candidate audio
+      - name: Decode test audio
         run: |
-          cat asr/cand1/p*.txt > asr/cand1/input.b64
-          base64 -d asr/cand1/input.b64 > asr/cand1/input.c2
-          ffmpeg -hide_banner -loglevel error -i asr/cand1/input.c2 -ar 16000 -ac 1 asr/cand1/input.wav
-          ls -lh asr/cand1/input.c2 asr/cand1/input.wav
+          base64 -d asr/input.b64 > asr/input.c2
+          ffmpeg -hide_banner -loglevel error -i asr/input.c2 -ar 16000 -ac 1 asr/input.wav
+          ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 asr/input.wav
       - name: Install ASR
         run: |
           python -m pip install --upgrade pip
@@ -41,26 +40,19 @@ jobs:
           from faster_whisper import WhisperModel
           OFFSET=2130.0
           model = WhisperModel('small', device='cpu', compute_type='int8')
-          segments, info = model.transcribe('asr/cand1/input.wav', language='zh', vad_filter=True, beam_size=5)
+          segments, info = model.transcribe('asr/input.wav', language='zh', vad_filter=True, beam_size=5)
           lines=[]
           for s in segments:
               line=f'[{s.start+OFFSET:.2f}-{s.end+OFFSET:.2f}] {s.text.strip()}'
               print(line)
               lines.append(line)
-          open('asr/cand1/transcript.txt','w',encoding='utf-8').write('\n'.join(lines)+'\n')
+          open('asr/transcript_700c.txt','w',encoding='utf-8').write('\n'.join(lines)+'\n')
           PY
           python /tmp/transcribe.py
       - name: Save transcript
         run: |
           git config user.name 'temp-asr-bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add asr/cand1/transcript.txt
-          git commit -m 'Write candidate ASR transcript' || exit 0
+          git add asr/transcript_700c.txt
+          git commit -m 'Write 700C ASR test transcript' || exit 0
           git push origin HEAD:temp-asr-20260910
-      - name: Upload transcript artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: candidate-transcript
-          path: asr/cand1/transcript.txt
-          if-no-files-found: ignore
