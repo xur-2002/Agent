@@ -23,8 +23,9 @@ jobs:
           python-version: '3.11'
       - name: Decode audio
         run: |
-          base64 -d asr/input.b64 > asr/input.webm
-          ls -lh asr/input.webm
+          base64 -d asr/input.b64 > asr/input.c2
+          ffmpeg -hide_banner -loglevel error -i asr/input.c2 -ar 16000 -ac 1 asr/input.wav
+          ls -lh asr/input.c2 asr/input.wav
       - name: Install ASR
         run: |
           python -m pip install --upgrade pip
@@ -34,7 +35,7 @@ jobs:
           cat > /tmp/transcribe.py <<'PY'
           from faster_whisper import WhisperModel
           model = WhisperModel('small', device='cpu', compute_type='int8')
-          segments, info = model.transcribe('asr/input.webm', language='zh', vad_filter=True, beam_size=5)
+          segments, info = model.transcribe('asr/input.wav', language='zh', vad_filter=True, beam_size=5)
           lines=[]
           for s in segments:
               line=f'[{s.start:.2f}-{s.end:.2f}] {s.text.strip()}'
